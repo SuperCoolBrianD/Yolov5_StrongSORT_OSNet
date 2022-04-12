@@ -1,0 +1,6 @@
+[submodule "yolor"]
+	path = yolor
+	url = https://github.com/SuperCoolBrianD/yolor
+[submodule "sort"]
+	path = sort
+	url = https://github.com/SuperCoolBrianD/sort.git
