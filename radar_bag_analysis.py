@@ -4,7 +4,6 @@ sys.path.append('yolor')
 from yolor.detect_custom import init_yoloR, detect
 import sort
 import rosbag
-
 import matplotlib.patches as patches
 from matplotlib.animation import FuncAnimation, FFMpegWriter
 from radar_utils import *

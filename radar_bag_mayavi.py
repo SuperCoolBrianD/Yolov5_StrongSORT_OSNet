@@ -60,7 +60,7 @@ def filter_zero(pc):
     return pc
 
 
-bag = rosbag.Bag("record/traffic1.bag")
+bag = rosbag.Bag("record/car_1.bag")
 topics = bag.get_type_and_topic_info()
 # print(topics)
 
