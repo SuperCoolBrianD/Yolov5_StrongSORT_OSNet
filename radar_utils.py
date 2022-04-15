@@ -69,8 +69,10 @@ def radar_cam(rx, ry, rz, tx, ty, tz):
     return r@t
 
 
-def render_lidar_on_image(pts_radar, img, rx, ry, rz, tx, ty, tz, img_width, img_height):
+def render_radar_on_image(pts_radar, img, rx, ry, rz, tx, ty, tz, img_width, img_height):
+    """functions to project radar points on image"""
     # projection matrix (project from velo2cam2)
+    # todo change to use actual camera intrinsic from calibration
     img = img.copy()
     cam_matrix = np.eye(4)
     cam_matrix[0, 0] = 640
@@ -89,8 +91,7 @@ def render_lidar_on_image(pts_radar, img, rx, ry, rz, tx, ty, tz, img_width, img
 
     # Filter out pixels points
     imgfov_pc_pixel = pts_2d[:, inds]
-    # Retrieve depth from lidar
-
+    # Retrieve depth from radar
     imgfov_pc_velo = pts_radar[:, :3][inds, :]
     imgfov_pc_velo = np.hstack((imgfov_pc_velo, np.ones((imgfov_pc_velo.shape[0], 1))))
     imgfov_pc_cam2 = proj_radar2cam @ imgfov_pc_velo.transpose()
@@ -110,15 +111,12 @@ def render_lidar_on_image(pts_radar, img, rx, ry, rz, tx, ty, tz, img_width, img
 
     return img, imgfov_pc_pixel
 
-# radar
 
 def filter_cluster(pc, label):
     msk = label != -1
     pc = pc[msk, :]
     if pc.shape[0] == 0:
         return np.zeros([1,5])
-
-    # print(msk)
     return pc
 
 
@@ -130,8 +128,6 @@ def set_cluster(pc, label):
             msk = label == i
             pts = pc[msk, :]
             pc_list.append(pts)
-    # if not pc_list:
-    #     return [np.zeros([1,5])]
     return pc_list
 
 
@@ -147,14 +143,9 @@ def convert_to_numpy(pc):
 
 
 def filter_zero(pc):
+    """Filter low velocity points"""
     mask = np.abs(pc[:, 3]) > 0.05
-    s = np.sum(mask)
-    # print(pc.shape)
-    # print(mask)
-    # print(mask.shape)
     pc = pc[mask, :]
-    # if pc.shape[0] == 0:
-    #     return np.zeros([1,5])
     return pc
 
 
@@ -168,14 +159,28 @@ def get_bbox(arr):
 
 
 def dbscan_cluster(pc, eps=3, min_sample=25, axs=None):
+    """
+    clustering algorithm
+    pc: radar point cloud (Nx5)
+    eps: dbscan parameter for closeness to be considered as neighbour
+    min_sample: minimum sample to be considered as neighbourhood
+    axs: plotting parameter set to None if no required
+    """
+
     total_box = np.empty((0, 5))
+    # if empty return None
     if not pc.any():
         return total_box, None
+    # Init DBSCAN algorithm
     clustering = DBSCAN(eps=eps, min_samples=min_sample)
+    # cluster pc
     clustering.fit(pc)
+    # generate cluster label for each point
     label = clustering.labels_
+    # filter cluster by label from DBSCAN
     cls = set_cluster(pc, label)
     for i, c in enumerate(cls):
+        # get 2D bbox of cluster
         bbox, box = get_bbox(c)
         box[0,-1] = i
         if total_box.size == 0:
@@ -199,20 +204,21 @@ def get_centroid(bbox):
 
 
 class radar_object:
+    """radar object for data abstraction"""
     def __init__(self, current_p):
+        """current_p: first position where the track is initialized Tuple ((x, y), time)"""
         self.tracklet = [current_p]
         self.speed = 'NaN'
-        # store position in the format ((x, y), time)
         self.current_p = current_p
         self.life = 10
 
     def upd(self, current_p):
+        """update tracklet"""
         self.life = 10
         self.tracklet.append(current_p)
-        # self.speed = np.sqrt(((self.tracklet[-1][0][0]-self.tracklet[-2][0][0])**2+
-        #              (self.tracklet[-1][0][1]-self.tracklet[-2][0][1])**2))/(self.tracklet[-1][1]-self.tracklet[-2][1])*3.6
 
     def update_speed(self):
+        """calculate speed based on moving average"""
         speed_hist = []
         l = len(self.tracklet)
         average_window = 6
@@ -224,10 +230,6 @@ class radar_object:
             self.speed = sum(speed_hist) / len(speed_hist)
         else:
             self.speed = 'Measuring'
-            # for i in range(2, l+1):
-            #     speed_hist.append(np.sqrt(((self.tracklet[-1][0][0] - self.tracklet[-i][0][0]) ** 2 +
-            #                           (self.tracklet[-1][0][1] - self.tracklet[-i][0][1]) ** 2)) / (
-            #                              self.tracklet[-1][1] - self.tracklet[-i][1]) * 3.6)
 
 
 def timestamp_sync(imgs, t):

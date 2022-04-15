@@ -119,7 +119,7 @@ for its, i in enumerate(bg):
             ty = 0
             tz = 0.05
             rx = 1.65
-            img, cam_arr = render_lidar_on_image(arr, cam1, rx, ry, rz, tx, ty, tz, 9000, 9000)
+            img, cam_arr = render_radar_on_image(arr, cam1, rx, ry, rz, tx, ty, tz, 9000, 9000)
             # print(img)
             cv2.imshow('Camera', img)
             cv2.waitKey(1)
