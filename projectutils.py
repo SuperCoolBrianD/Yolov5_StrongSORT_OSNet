@@ -82,27 +82,20 @@ def get_corner(self, label_file_line):
     self.t = (data[11], data[12], data[13])  # location (x,y,z) in camera coord.
     self.ry = data[14]  # yaw angle (around Y-axis in camera coordinates) [-pi..pi]
 
-def in_camera_coordinate(self, is_homogenous=False):
+
+def in_camera_coordinate(t1, t2, t3, l, w, h, ry, is_homogenous=False):
     # 3d bounding box dimensions
-    l = self.l
-    w = self.w
-    h = self.h
 
     # 3D bounding box vertices [3, 8]
     x = [l / 2, l / 2, -l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2]
     y = [0, 0, 0, 0, -h, -h, -h, -h]
     z = [w / 2, -w / 2, -w / 2, w / 2, w / 2, -w / 2, -w / 2, w / 2]
     box_coord = np.vstack([x, y, z])
-
-    # Rotation
-    R = roty(self.ry)  # [3, 3]
+    R = roty(ry)  # [3, 3]
     points_3d = R @ box_coord
-
-    # Translation
-    points_3d[0, :] = points_3d[0, :] + self.t[0]
-    points_3d[1, :] = points_3d[1, :] + self.t[1]
-    points_3d[2, :] = points_3d[2, :] + self.t[2]
-
+    points_3d[0, :] = points_3d[0, :] + t1
+    points_3d[1, :] = points_3d[1, :] + t2
+    points_3d[2, :] = points_3d[2, :] + t3
     if is_homogenous:
         points_3d = np.vstack((points_3d, np.ones(points_3d.shape[1])))
 
@@ -524,3 +517,5 @@ def img_fov(pc_velo, calib, img_width, img_height):
     imgfov_pc_velo = pc_velo[inds, :]
 
     return imgfov_pc_velo
+
+

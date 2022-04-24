@@ -18,13 +18,13 @@ plt.close('all')
 from datetime import datetime
 startTime = datetime.now()
 
-filterType="IPDAKF" #tracking algorithm
+filterType="IPDAGVBLSVSF" #tracking algorithm
 useSVSF_G = False #use S.A. Gadsden's SVSF
 modelType = "CV" #model for tracker, only single model trackers in this program
 useNewTraj = 1 # 1 means to generate a new synthetic trajectory, 0 means to use a existing one from a file
 
 totalTime = 200 #total duration of simulation
-numTargets = 2 #number of targets
+numTargets = 1#number of targets
 
 #Parameters
 Ts = .1 #sampling time
@@ -37,21 +37,21 @@ L2 = .06
 sigma_v_filt = sigma_v #process noise standard deviation for filter
 maxVel = 27 #for initializing velocity variance for 1-point initialization
 omegaMax = math.radians(4) #for initializing turn-rate variance for 1-point initialization
-numRuns = 10 #number of Monte Carlo Runs
+numRuns = 100 #number of Monte Carlo Runs
 N = int(totalTime/Ts) #number of samples in the timulation
 
 t = np.arange(0,totalTime,Ts) #time vector for simulation for plotting
 
 #Parameters for tracking in clutter
-lambdaVal = 1E-4 #parameter for clutter density
-PD = .8 #probability of target detection in a time step
+lambdaVal = 1E-4;#parameter for clutter density
+PD = .8#probability of target detection in a time step
 #PG = .9999999999999999
 PG = .9979 #gate probability
 regionWidth = 100 #width of the clutter region surrounding a target
 regionLength = 100 #length of the clutter region surrounding a target
 pInit = .2 #initial probability of track existence
 
-P_ii = .99  #for Markov matrix of IPDA
+P_ii = .999  #for Markov matrix of IPDA
 MP = np.array([[P_ii,1-P_ii],[1-P_ii,P_ii]]) #Markov matrix for IPDA
 
 #Parameters for track management
@@ -187,18 +187,43 @@ else:
     """
     
     #psi1= 657.0
+    '''
     psi1 = 10
-    psi2 = 75
+    psi2 = 20
+    psi3 = 20
+    gammaZ = 0.8*np.eye(m)
+    gammaY = 0.8*np.eye(n-m)
+    '''
+    '''
+    psi1 = math.inf
+    psi2 = math.inf
+    psi3 = math.inf
+    gammaZ = .1*np.eye(m)
+    gammaY = .1*np.eye(n-m)
+    '''
+    
+    '''
+    psi1 = 10*5
+    psi2 = 75*2
     psi3 = 75
-    gammaZ = 0.1*np.eye(m)
-    gammaY = 0.1*np.eye(n-m)
+    gammaZ = 0.9*np.eye(m)
+    gammaY = 0.9*np.eye(n-m)
+    '''
+    
+    psi1 = 10
+    psi2 = 100
+    psi3 = 100
+    gammaZ = .1*np.eye(m)
+    gammaY = .1*np.eye(n-m)
     
     ##Best for CV
-    #gammaZ = 0.778*np.eye(m)
-    #gammaY = 0.778*np.eye(n-m)
-    #psi1 = 9333.0
-    #psi2 = 40.0
-    #psi3 = 10 #arbitrary 
+    '''
+    gammaZ = 0.778*np.eye(m)
+    gammaY = 0.778*np.eye(n-m)
+    psi1 = 9333.0
+    psi2 = 40.0
+    psi3 = 10 #arbitrary 
+    '''
     
     
     psiZ = np.array([psi1,psi1])
@@ -281,7 +306,6 @@ numErrCasesT2=0
 
 #Tracking Loop
 for ii in range(numRuns): #for each Monte Carlo run
-
     trackList = [0]*8000 #allocate track list, a list of objects
     lastTrackIdx = -1 #index of a track in the list,
 
@@ -334,7 +358,7 @@ for ii in range(numRuns): #for each Monte Carlo run
                 z0 = H[0:2,0:2]@x0[0:2] + np.random.multivariate_normal(np.array([0,0]),R[0:2,0:2])
                 z0 = np.array([z0[0],z0[1],0,0,0])
  
-        track1  = track(z0,G,H,Q,R,sigma_w,maxVel,omegaMax, pInit,1,0,Ts,modelType,sensor,N) #initalize the track
+        track1  = track(z0,G,H,Q,R,maxVel,omegaMax, pInit,0,Ts,modelType,sensor,N) #initalize the track
         trackList[0] = track1
         lastTrackIdx=lastTrackIdx+1
     
@@ -343,7 +367,7 @@ for ii in range(numRuns): #for each Monte Carlo run
     xMax = x_01[0] + round(regionWidth/2)
     
     yMin = x_01[1] - round(regionLength/2) #y range of region around target 2
-    xMax = x_01[0] + round(regionWidth/2)
+    #xMax = x_01[0] + round(regionWidth/2)
     yMax = x_01[1] + round(regionLength/2)
     
     xLims1 = [xMin,xMax] #info for the coverage region around target 1
@@ -373,14 +397,11 @@ for ii in range(numRuns): #for each Monte Carlo run
     T1_Detected = 0
     T2_Detected = 0
     
-    for k in range(1, N): #for each sample/frame/scan
+    for k in range(1,N): #for each sample/frame/scan
         t_k = t[k] #current time in simulation
         T1_Present = (t_k>=t1_start and t_k<=t1_end) #check if target 1 is present
         T2_Present = (t_k>=t2_start and t_k<=t2_end) #check if target 2 is present
-
-
         for i in range(numTargets):
-            # for simulation
             if  (T1_Present and i==0) or (T2_Present and i==1): #if any target is present
                 u = random.uniform(0, 1) #generate uniform random number 
                 if u<=PD:  #if the target is detected obtain its measurement    
@@ -400,7 +421,8 @@ for ii in range(numRuns): #for each Monte Carlo run
                         z_k[0] = rangeMeas
                         z_k[1] = angleMeas
                     else:
-                        # for lidar
+                        
+                        #for lidar
                         if m==n: #for using S.A. Gadsden's SVSF
                             z_kPos = H[0:2,0:2]@x_k[0:2] + np.random.normal(0,sigma_w,2)
                             vx_m = (z_kPos[0] - zkPrev[0])/Ts #generate artifical measurements
@@ -420,6 +442,11 @@ for ii in range(numRuns): #for each Monte Carlo run
                             z_k = H@x_k + np.random.normal(0,sigma_w,2)
                 else:
                     z_k =  np.array([math.inf,math.inf])#if no target is detected
+                    if i==0:
+                        T1_Detected=0
+                    elif i==1:
+                        T2_Detected=0
+                    
                 if i==0 :
                     z_k1 = z_k #if target 1, store z_k into z_k1
                 else:
@@ -442,26 +469,24 @@ for ii in range(numRuns): #for each Monte Carlo run
             elif T1_Detected==1 and T2_Detected==0 :
                 targetMeas = np.expand_dims(z_k1,axis=-1) #if both targets are present, but only target 1 is detected 
             elif T1_Detected==0 and T2_Detected==1:
-                targetMeas = np.expand_dims(z_k2,axis=-1)
-                # if both targets are present, but only target 2 is detected
+                targetMeas = np.expand_dims(z_k2,axis=-1) #if both targets are present, but only target 2 is detected
             else:
                 targetMeas = []
         else:
             targetMeas = []
                             
-        if filterType == "PDAKF" or filterType == "IPDAKF":
-            #Generate clutter
+        if filterType == "PDAKF" or filterType == "IPDAKF" or filterType=="IPDASVSF" or  filterType == "IPDAGVBLSVSF":
+            #Generate clutter     
             for i in range(numTargets):
                 if i==0:
-                    x_k = xTargetCarTraj1[:,k]
-                    # true state of target 1
+                    x_k = xTargetCarTraj1[:,k] #true state of target 1
                     #z_k = z_k1
                 elif i==1:
                     x_k = xTargetCarTraj2[:,k] #true state of target 2
                     #z_k = z_k2
             
                 sensorPos = np.array([x_k[0],x_k[1]]) #for radar, set at the same position of the target
-
+                
                 #generate region, xMin is the min. x in the region, xMax is the max x. in the region, yMin is the min. y, and yMax is the max. y in the region
                 #x_k[0] and x_k[1] denote the X and Y position of the target
                 xMin = x_k[0] - round(regionWidth/2) 
@@ -483,38 +508,28 @@ for ii in range(numRuns): #for each Monte Carlo run
                 measSet = np.hstack((clutterPoints1,clutterPoints2,targetMeas)) #full set of measurements
             else: #if no target is detected
                 measSet = np.hstack((clutterPoints1,clutterPoints2)) #full set of measurements
-            # Tracking starts
-            # print(measSet)
-            # perform gating
-            # measSet is the detection for current frame
-            trackList, unassignedMeas = gating(trackList, lastTrackIdx,PG,sensorPos,measSet)
-            # perform gating
-            trackList = updateStateTracks(trackList,lastTrackIdx, filterType, measSet, lambdaVal,MP, PG, PD, sensorPos, k)
-            # update the state of each track
-            trackList = updateTracksStatus(trackList,lastTrackIdx, delTenThr, delConfThr, confTenThr,k)
-            # update the status of each track usiing the track manager
+            #perform gating
+            trackList,unassignedMeas = gating(trackList,lastTrackIdx,PG,sensorPos,measSet) #perform gating
+            trackList = updateStateTracks(trackList,lastTrackIdx, filterType, measSet, lambdaVal,MP, PG, PD, sensorPos,T, gammaZ, gammaY, psiZ, psiY, k) #update the state of each track
+            trackList = updateTracksStatus(trackList,lastTrackIdx, delTenThr, delConfThr, confTenThr,k) #update the status of each track usiing the track manager
+            
             #initiate tracks for measurements that were not gated or in other words unassigned measurements
-            trackList, lastTrackIdx = initiateTracks(trackList,lastTrackIdx,unassignedMeas, sigma_w, maxVel, omegaMax, G, H, Q, R, modelType, Ts, pInit, k, sensor, N)
-            for jjj in trackList:
-                if jjj == 0:
-                    break
-                print(jjj.status)
+            trackList,lastTrackIdx = initiateTracks(trackList,lastTrackIdx,unassignedMeas, sigma_w, maxVel, omegaMax, G, H, Q, R, modelType, Ts, pInit, k, sensor, N)
    
     numTracks = lastTrackIdx+1 #total number of tracks
-
+    
     for i in range(numTracks): #loop through the track list
         status = trackList[i].status
         if status==1 or status==2: #if the track is tenative or confirmed, set the endSample property to the last sample, which is the value of k at the end of the loop above
             trackList[i].endSample = k
     
     for j in range(numTracks): #loop through each track
-         
         isTrack1 = abs(t1_startSample - trackList[j].startSample) <8 #Boolean value, associate track to target 1 if the startSample is close to the true start sample
         isTrack2 = abs(t2_startSample - trackList[j].startSample) <8 #Boolean value, associate track to target 2 if the startSample is close to the true start sample
         
         numSamples = trackList[j].endSample - trackList[j].startSample + 1 #total number of samples processed in the track
         
-        if (isTrack1==True or isTrack2==True) and numSamples>100: #if the track is associated to one of the targets and the number of samples is greater than 100
+        if (isTrack1==True or isTrack2==True) and numSamples>10: #if the track is associated to one of the targets and the number of samples is greater than 100
                                                                 #obtain its state estimates
             xEsts = trackList[j].xEsts
             
@@ -526,6 +541,8 @@ for ii in range(numRuns): #for each Monte Carlo run
 
                 xPosRMSE = computeRMSE(xPosTrue1, xPosEst) #get RMSE
                 yPosRMSE = computeRMSE(yPosTrue1, yPosEst)
+                
+                BLs_T1 = trackList[j].BLs
                 
                 if xPosRMSE > errThr or yPosRMSE > errThr:
                     numErrCasesT1 = numErrCasesT1+1 #ignore runs with high error
@@ -553,6 +570,9 @@ for ii in range(numRuns): #for each Monte Carlo run
 
                 xPosRMSE = computeRMSE(xPosTrue2, xPosEst)
                 yPosRMSE = computeRMSE(yPosTrue2, yPosEst)
+                
+                BLs_T2 = trackList[j].BLs
+
                
                 if xPosRMSE > errThr or yPosRMSE > errThr:
                     numErrCasesT2 = numErrCasesT2+1 #ignore runs with high error
@@ -716,7 +736,7 @@ for i in range(numTracks): #for each track
     numSamples = trackList[i].endSample - trackList[i].startSample+ 1 #obtain the number of processed samples
      
     numSamplesArr[i] = numSamples
-    if numSamples > 10: #if the number of samples processed is above 10
+    if numSamples > 100: #if the number of samples processed is above 10
         xEsts = trackList[i].xEsts #obtain state estimates
         startSample = trackList[i].startSample
         endSample = trackList[i].endSample
@@ -739,3 +759,11 @@ print("yPosRMSE="+ str(yPosRMSE2))
 print("xVelRMSE="+str(xVelRMSE2))
 print("yVelRMSE="+str(yVelRMSE2))
 print("omegaRMSE="+str(omegaRMSE2))
+
+if filterType == "IPDASVSF":
+    xPosBLs = BLs_T1[0,:]
+    yPosBLs = BLs_T1[1,:]
+    xVelBLs = BLs_T1[2,:]
+    yVelBLs = BLs_T1[3,:]
+    omegaBLs= BLs_T1[4,:]
+    

@@ -298,7 +298,6 @@ def obtain_Jacobian_H(xVec,sensorPos):
     
     return H
 
-
 def generateTrajectory(x0,modelList, xVelList, yVelList, omegaList,timeList,covList,startSampleInit,Ts,N):
     #Generate the true trajectory of a target
     
@@ -416,7 +415,6 @@ def gating(trackList,lastTrackIdx,PG,sensorPos,measSet):
         status = track_i.status
          
         if status == 1 or status == 2: #if the track is tenative or confirmed
-        
             #obtain the track's state, co-variance, the model for the filter, sampling time, process noise co-variance, measurement noise co-variance, sensor type, input gain matrix, and measurement matrix
             xPost_i = track_i.xPost
             P_Post_i = track_i.P_Post
@@ -458,7 +456,7 @@ def gating(trackList,lastTrackIdx,PG,sensorPos,measSet):
                 zPred = H_i@xPred 
         
             S = H_i@P_Pred@H_i.T + R #innovation co-variance
-            S_inv = np.linalg.inv(S)
+            S_inv = np.linalg.pinv(S)
             
             gateArr = np.zeros((numMeas,)) #binary array, if measurement j falls in the gate, set it to 1
             
@@ -481,7 +479,7 @@ def gating(trackList,lastTrackIdx,PG,sensorPos,measSet):
     unassignedMeas = np.vstack((measSet[:,nonGatedIdx][0],measSet[:,nonGatedIdx][1]))
     return trackList, unassignedMeas
 
-def initiateTracks(trackList,lastTrackIdx, measSet,sigma_w,maxVel,maxOmega,G,H,Q,R,modelType,Ts,pInit, startSample,sensor,N):
+def initiateTracks(trackList,lastTrackIdx,measSet,maxVel,maxOmega,G,H,Q,R,modelType,Ts,pInit, startSample,sensor,N):
     #initiates a track for each measurement in measSet
     
     numMeas = measSet.shape[1]
@@ -491,13 +489,13 @@ def initiateTracks(trackList,lastTrackIdx, measSet,sigma_w,maxVel,maxOmega,G,H,Q
         for i in range(numMeas):
             j=j+1 #index of new track
             z_i = measSet[:,i] #ith measurement 
-            track_j = track(z_i,G,H,Q,R,sigma_w,maxVel,maxOmega,pInit,1,startSample,Ts,modelType,sensor,N) #initiate jth track 
+            track_j = track(z_i,G,H,Q,R,maxVel,maxOmega,pInit,startSample,Ts,modelType,sensor,N) #initiate jth track 
             trackList[j] = track_j #store track at position j in trackList
            
         lastTrackIdx = j #index of last track
     return trackList,lastTrackIdx
 
-def updateStateTracks(trackList,lastTrackIdx, filterType,measSet,lambdaVal,MP,PG,PD,sensorPos,k):
+def updateStateTracks(trackList,lastTrackIdx, filterType,measSet,lambdaVal,MP,PG,PD,sensorPos,T_mat, gammaZ, gammaY, psiZ, psiY,k):
     #updates the state and co-variance of each track using a filter
     
     #numTracks = len(trackList)
@@ -522,6 +520,11 @@ def updateStateTracks(trackList,lastTrackIdx, filterType,measSet,lambdaVal,MP,PG
                     track_i.PDAKF(measSet,lambdaVal,PG,PD,sensorPos)
                 elif filterType == "IPDAKF":
                     track_i.IPDAKF(measSet,MP,PD,PG,lambdaVal,sensorPos)
+                elif filterType == "IPDASVSF":
+                    track_i.IPDASVSF(measSet, MP, PD, PG, lambdaVal, sensorPos, T_mat, gammaZ, gammaY, psiZ, psiY)
+                elif filterType == "IPDAGVBLSVSF":
+                    track_i.IPDAGVBLSVSF(measSet, MP, PD, PG, lambdaVal, sensorPos, T_mat, gammaZ, gammaY, psiZ, psiY)
+                    track_i.stackBL(k)
                 track_i.stackState(k) #store the state estimate into the track's array
                 
                 trackList[i] = track_i #store updated track i
@@ -532,8 +535,8 @@ def updateTracksStatus(trackList,lastTrackIdx,delTenThr, delConfThr, confTenThr,
     
     numTracks= lastTrackIdx+1
     for i in range(numTracks): #for each track
-        status = trackList[i].status # current status
-        p = trackList[i].pCurrent # current probability of track existence
+        status = trackList[i].status #current status
+        p = trackList[i].pCurrent #current probability of track existence
         
         #0 indicates the track is deleted, 1 means its tenative, and 2 indicates confirmed
         if status==1: #if the track is tenative
@@ -542,11 +545,11 @@ def updateTracksStatus(trackList,lastTrackIdx,delTenThr, delConfThr, confTenThr,
                 trackList[i].endSample = k
             elif p>=confTenThr: #if above the confirmation threshold
                 trackList[i].status = 2 #confirm track, set that status as confirmed
-        elif status==2: # if the track is confirmed
+        elif status==2: #if the track is confirmed
             if p<delConfThr: #if below the deletion threshold
                 trackList[i].status = 0  #removed confirmed track
                 trackList[i].endSample = k #store the last sample/frame processed
-        # add if status == 0: trackList.pop(i)
+                
     return trackList
             
 

@@ -1,6 +1,7 @@
 import sys
 sys.path.append('yolor')
 sys.path.append('SVSF_Track')
+from yolor.detect_custom import init_yoloR, detect
 from SVSF_Track.MTT_Functions import *
 from radar_utils import *
 import sort
@@ -55,9 +56,10 @@ Ts = .12 #sampling time
 unassignedMeas0 = np.array([[]])
 maxVel = 16 #for initializing velocity variance for 1-point initialization
 omegaMax = math.radians(4) #for initializing turn-rate variance for 1-point initialization
-modelType = 'CT'
+modelType = 'CV'
 sensor = 'Lidar'
-filterType = "IPDAKF"
+filterType = "IPDAGVBLSVSF"
+# filterType = "IPDASVSF"
 sensorPos = np.array([0, 0])
 P_ii = .95  #for Markov matrix of IPDA
 PD = .6 #probability of target detection in a time step
@@ -66,6 +68,30 @@ lambdaVal = 0.05 # parameter for clutter density
 delTenThr = .05 #threshold for deleting a tenative track
 confTenThr = .9 # threshold for confirming a tenative track
 delConfThr = 0.05 # threshold for deleting a confirmed track
+
+# new for svsf
+n = 5 # x, y, vx, vy, turn
+m = 2
+psi1 = 10 # p larger uncertainty increase
+psi2 = 100 # v larger uncertainty increase
+psi3 = 100 # turn rate larger uncertainty increase
+gammaZ = .1 * np.eye(m) # convergence rate stability from 0-1 for measured state
+gammaY = .1 * np.eye(n - m) # for unmeasured state-
+
+##Best for CV
+'''
+gammaZ = 0.778*np.eye(m)
+gammaY = 0.778*np.eye(n-m)
+psi1 = 9333.0
+psi2 = 40.0
+psi3 = 10 #arbitrary 
+'''
+
+psiZ = np.array([psi1, psi1])
+psiY = np.array([psi2, psi2, psi3])
+T_mat = np.eye(5)
+
+
 
 if modelType=="CV":
     Q = np.diag(np.array([sigma_v_filt**2,sigma_v_filt**2,0**2]))
@@ -93,12 +119,14 @@ elif modelType=="CT":
     '''
 
 
-N = 1000
-trackList,lastTrackIdx = initiateTracks(trackList,lastTrackIdx, unassignedMeas0, sigma_w, maxVel, omegaMax, G, H, Q, R,
+N = 10000
+trackList,lastTrackIdx = initiateTracks(trackList,lastTrackIdx, unassignedMeas0, maxVel, omegaMax, G, H, Q, R,
                                         modelType, Ts, pInit, 0, sensor, N)
 k = 0
 
-
+t_array = []
+dt_array = []
+dt_no_match_array = []
 def animate(g):
     global image_np
     global framei
@@ -112,15 +140,17 @@ def animate(g):
     global trackList
     global lastTrackIdx
     global k, G, H, Q, R, N
+    global t_array
+    global dt_array
+    global t_no_matching
+    global dt_no_match_array
     i = next(bg)
     # read ros Topic camera or radar
     if i.topic == '/usb_cam/image_raw/compressed':
         np_arr = np.frombuffer(i.message.data, np.uint8)
         image_np = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-        if update:
-            cam1 = image_np
-            update = 0
-        # draw tracks
+        t_array.append((i[2], image_np))
+        t_no_matching = i[2]
         for tk, j in enumerate(alive_track[:lastTrackIdx]):
             if j:
                 # print(tracked_object[tk].tracklet)
@@ -128,6 +158,22 @@ def animate(g):
                 y = [obtk[0][1] for obtk in tracked_object[tk].tracklet]
                 axs.plot(x, y, mew=0)
     elif i.topic == '/radar_data' or 'radar_data':
+        # print(i[2])
+        # print(i.message.time_stamp)
+        # select closest image to radar frame
+        min_t = 999999999
+        print(len(t_array))
+        dt_no_match = abs(i[2].to_sec() - t_no_matching.to_sec())
+        dt = None
+        for c_frame in t_array:
+            if abs(c_frame[0].to_sec()-i[2].to_sec()) < min_t:
+                cam1 = c_frame[1]
+                dt = abs(c_frame[0].to_sec()-i[2].to_sec())
+        if dt:
+            dt_array.append(dt)
+        dt_no_match_array.append(dt_no_match)
+        t_array = []
+        # print(dt)
         plt.cla()
         # record time (ROS time)
         tm = i.message.time_stamp[0]/10**6
@@ -157,13 +203,13 @@ def animate(g):
             # perform tracking
             trackList, unassignedMeas = gating(trackList, lastTrackIdx, PG, sensorPos, measSet)
             # perform gating
-            trackList = updateStateTracks(trackList,lastTrackIdx, filterType, measSet, lambdaVal,MP, PG, PD, sensorPos,
-                                          k)
+            trackList = updateStateTracks(trackList,lastTrackIdx, filterType, measSet, lambdaVal,MP, PG, PD, sensorPos, T_mat
+                                          , gammaZ, gammaY, psiZ, psiY,k)
             # update the state of each track
             trackList = updateTracksStatus(trackList,lastTrackIdx, delTenThr, delConfThr, confTenThr,k)
             # update the status of each track usiing the track manager
             # initiate tracks for measurements that were not gated or in other words unassigned measurements
-            trackList, lastTrackIdx = initiateTracks(trackList,lastTrackIdx,unassignedMeas, sigma_w, maxVel, omegaMax,
+            trackList, lastTrackIdx = initiateTracks(trackList,lastTrackIdx,unassignedMeas, maxVel, omegaMax,
                                                      G, H, Q, R, modelType, Ts, pInit, k, sensor, N)
             k += 1
             # iterate through all tracks
@@ -203,12 +249,25 @@ def animate(g):
             rz = 0
             tx = 0
             ty = 0
-            tz = 0.05
+            tz = 0.1
             rx = 1.65
-            img, cam_arr = render_radar_on_image(arr, cam1, rx, ry, rz, tx, ty, tz, 9000, 9000)
+            r2c = cam_radar(rx, ry, rz, tx, ty, tz)
+            if cls:
+                for cc in cls:
+                    bbox = get_bbox_cls(cc)
+                    bbox = in_camera_coordinate(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], 0)
+                    bbox = project_to_image(bbox, r2c)
+                    draw_projected_box3d(cam1, bbox)
+            img, cam_arr = render_radar_on_image(arr, cam1, r2c, 9000, 9000)
             cv2.imshow('Camera', img)
             cv2.waitKey(1)
             update = 1
+        # print(f'Max dt = {max(dt_array)}')
+        # print(f'Min dt = {min(dt_array)}')
+        # print(f'Average dt = {sum(dt_array)/len(dt_array)}')
+        # print(f'Max dt_no_match = {max(dt_no_match_array)}')
+        # print(f'Min dt_no_match = {min(dt_no_match_array)}')
+        # print(f'Average dt_no_match = {sum(dt_no_match_array)/len(dt_no_match_array)}')
 
 
 ani = FuncAnimation(fig, animate, interval=10, frames=2000)

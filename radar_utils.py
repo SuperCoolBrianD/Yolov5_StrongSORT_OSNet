@@ -69,11 +69,7 @@ def radar_cam(rx, ry, rz, tx, ty, tz):
     return r@t
 
 
-def render_radar_on_image(pts_radar, img, rx, ry, rz, tx, ty, tz, img_width, img_height):
-    """functions to project radar points on image"""
-    # projection matrix (project from velo2cam2)
-    # todo change to use actual camera intrinsic from calibration
-    img = img.copy()
+def cam_radar(rx, ry, rz, tx, ty, tz):
     cam_matrix = np.eye(4)
     cam_matrix[0, 0] = 640
     cam_matrix[1, 1] = 480
@@ -81,14 +77,19 @@ def render_radar_on_image(pts_radar, img, rx, ry, rz, tx, ty, tz, img_width, img
     cam_matrix[1, 2] = 240
     radar_matrix = radar_cam(rx, ry, rz, tx, ty, tz)
     proj_radar2cam = cam_matrix@radar_matrix
+    return proj_radar2cam
+
+def render_radar_on_image(pts_radar, img, proj_radar2cam, img_width, img_height):
+    """functions to project radar points on image"""
+    # projection matrix (project from velo2cam2)
+    # todo change to use actual camera intrinsic from calibration
+    img = img.copy()
     # apply projection
     pts_2d = project_to_image(pts_radar.transpose(), proj_radar2cam)
-
     # Filter lidar points to be within image FOV
     inds = np.where((pts_2d[0, :] < img_width) & (pts_2d[0, :] >= 0) &
                     (pts_2d[1, :] < img_height) & (pts_2d[1, :] >= 0)
                     )[0]
-
     # Filter out pixels points
     imgfov_pc_pixel = pts_2d[:, inds]
     # Retrieve depth from radar
@@ -135,10 +136,16 @@ def convert_to_numpy(pc):
     l = len(pc)
     arr = np.zeros((l, 5))
     for i, point in enumerate(pc):
-        arr[i, 0] = point.x
-        arr[i, 1] = point.y
-        arr[i, 2] = point.z
-        arr[i, 3] = point.doppler
+        if point.x != 0 and point.y != 0 and point.z != 0:
+            arr[i, 0] = point.x
+            arr[i, 1] = point.y
+            arr[i, 2] = point.z
+            arr[i, 3] = point.doppler
+        else:
+            arr[i, 0] = 0.1
+            arr[i, 1] = 0.1
+            arr[i, 2] = -100
+            arr[i, 3] = point.doppler
     return arr
 
 
@@ -156,6 +163,51 @@ def get_bbox(arr):
     x_max = max(x_coord)+1
     y_max = max(y_coord)+1
     return [x_min, y_min, x_max-x_min, y_max-y_min], np.array([[x_min, y_min, x_max, y_max, 1]])
+
+
+def get_bbox_cls(arr):
+    x_coord, y_coord, z_coord = arr[:, 0], arr[:, 1], arr[:, 2]
+    x_min = min(x_coord)
+    y_min = min(y_coord)
+    x_max = max(x_coord)
+    y_max = max(y_coord)
+    z_min = min(z_coord)
+    z_max = max(z_coord)
+    return np.array([x_min+(x_max-x_min)/2, y_min+(y_max-y_min)/2, z_min+(z_max-z_min)/2 ,
+                      x_max-x_min, y_max-y_min, z_max-z_min, 0])
+
+
+def in_camera_coordinate(t1, t2, t3, l, w, h, ry, is_homogenous=False):
+    # 3d bounding box dimensions
+
+    # 3D bounding box vertices [3, 8]
+    x = [l / 2, l / 2, -l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2]
+    z = [0, 0, 0, 0, -h, -h, -h, -h]
+    y = [w / 2, -w / 2, -w / 2, w / 2, w / 2, -w / 2, -w / 2, w / 2]
+    box_coord = np.vstack([x, y, z])
+    R = roty(ry)  # [3, 3]
+    points_3d = R @ box_coord
+    points_3d[0, :] = points_3d[0, :] + t1
+    points_3d[1, :] = points_3d[1, :] + t2
+    points_3d[2, :] = points_3d[2, :] + t3
+    if is_homogenous:
+        points_3d = np.vstack((points_3d, np.ones(points_3d.shape[1])))
+
+    return points_3d
+
+
+def draw_projected_box3d(image, qs, color=(255, 255, 255), thickness=1):
+    qs = qs.astype(np.int32).transpose()
+    for k in range(0, 4):
+        # http://docs.enthought.com/mayavi/mayavi/auto/mlab_helper_functions.html
+        i, j = k, (k + 1) % 4
+        cv2.line(image, (qs[i, 0], qs[i, 1]), (qs[j, 0], qs[j, 1]), color, thickness, cv2.LINE_AA)
+
+        i, j = k + 4, (k + 1) % 4 + 4
+        cv2.line(image, (qs[i, 0], qs[i, 1]), (qs[j, 0], qs[j, 1]), color, thickness, cv2.LINE_AA)
+
+        i, j = k, k + 4
+        cv2.line(image, (qs[i, 0], qs[i, 1]), (qs[j, 0], qs[j, 1]), color, thickness, cv2.LINE_AA)
 
 
 def dbscan_cluster(pc, eps=3, min_sample=25, axs=None):
@@ -182,7 +234,7 @@ def dbscan_cluster(pc, eps=3, min_sample=25, axs=None):
     for i, c in enumerate(cls):
         # get 2D bbox of cluster
         bbox, box = get_bbox(c)
-        box[0,-1] = i
+        box[0, -1] = i
         if total_box.size == 0:
             total_box = box
         else:
