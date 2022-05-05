@@ -69,7 +69,7 @@ def radar_cam(rx, ry, rz, tx, ty, tz):
     return r@t
 
 
-def cam_radar(rx, ry, rz, tx, ty, tz):
+def cam_radar(rx, ry, rz, tx, ty, tz, cam_matrix):
     cam_matrix = np.eye(4)
     cam_matrix[0, 0] = 640
     cam_matrix[1, 1] = 480

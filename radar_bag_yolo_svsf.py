@@ -9,7 +9,7 @@ import rosbag
 from matplotlib.animation import FuncAnimation
 
 # Read recording
-bag = rosbag.Bag("record/traffic1.bag")
+bag = rosbag.Bag("record/traffic3.bag")
 # bag = rosbag.Bag("record/traffic1.bag")
 topics = bag.get_type_and_topic_info()
 
@@ -22,6 +22,7 @@ for i in topics[1]:
 radar_d = '/radar_data'
 # init plt figure
 fig, axs = plt.subplots(1, figsize=(6, 6))
+fig.canvas.set_window_title('Radar Detection')
 # create generator object for recording
 bg = bag.read_messages()
 s = 0
@@ -72,11 +73,11 @@ delConfThr = 0.05 # threshold for deleting a confirmed track
 # new for svsf
 n = 5 # x, y, vx, vy, turn
 m = 2
-psi1 = 10 # p larger uncertainty increase
+psi1 = 100 # p larger uncertainty increase
 psi2 = 100 # v larger uncertainty increase
-psi3 = 100 # turn rate larger uncertainty increase
+psi3 = 10 # turn rate larger uncertainty increase
 gammaZ = .1 * np.eye(m) # convergence rate stability from 0-1 for measured state
-gammaY = .1 * np.eye(n - m) # for unmeasured state-
+gammaY = .1 * np.eye(n - m) # for unmeasured state
 
 ##Best for CV
 '''
@@ -118,15 +119,26 @@ elif modelType=="CT":
     #Q=Q_CT
     '''
 
-
+p_time = 0
 N = 10000
 trackList,lastTrackIdx = initiateTracks(trackList,lastTrackIdx, unassignedMeas0, maxVel, omegaMax, G, H, Q, R,
                                         modelType, Ts, pInit, 0, sensor, N)
 k = 0
-
+radar_p_time = 0
 t_array = []
 dt_array = []
 dt_no_match_array = []
+
+
+mtx = np.array([[234.45076996, 0., 334.1804498],
+                [0.,311.6748573,241.50825294],
+                [0., 0., 1.]])
+dist = np.array([[-0.06624252, -0.00059409, -0.00183169,  0.0030411,   0.00063524]])
+
+h,  w = 480, 640
+newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w,h), 1, (w,h))
+
+
 def animate(g):
     global image_np
     global framei
@@ -144,11 +156,22 @@ def animate(g):
     global dt_array
     global t_no_matching
     global dt_no_match_array
+    global p_time
+    global radar_p_time
+    global newcameramtx
+    global dist
+    global mtx
+    global roi
     i = next(bg)
     # read ros Topic camera or radar
     if i.topic == '/usb_cam/image_raw/compressed':
         np_arr = np.frombuffer(i.message.data, np.uint8)
         image_np = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        mapx, mapy = cv2.initUndistortRectifyMap(mtx, dist, None, newcameramtx, (640, 480), 5)
+        image_np = cv2.remap(image_np, mapx, mapy, cv2.INTER_LINEAR)
+        # crop the image
+        x, y, w, h = roi
+        image_np = image_np[y:y + h, x:x + w]
         t_array.append((i[2], image_np))
         t_no_matching = i[2]
         for tk, j in enumerate(alive_track[:lastTrackIdx]):
@@ -162,20 +185,28 @@ def animate(g):
         # print(i.message.time_stamp)
         # select closest image to radar frame
         min_t = 999999999
-        print(len(t_array))
         dt_no_match = abs(i[2].to_sec() - t_no_matching.to_sec())
         dt = None
-        for c_frame in t_array:
-            if abs(c_frame[0].to_sec()-i[2].to_sec()) < min_t:
-                cam1 = c_frame[1]
-                dt = abs(c_frame[0].to_sec()-i[2].to_sec())
-        if dt:
-            dt_array.append(dt)
+
+        radartime = radar_p_time - i.message.time_stamp[0]/10**6
+        radar_p_time = i.message.time_stamp[0]/10**6
+        ros_time = p_time - i[2].to_sec()
+        p_time = i[2].to_sec()
+        print(f"ros_time: {ros_time}")
+        print(f"radar_time: {radartime}")
+        print(f"delta lag: {abs(ros_time)-abs(radartime)}")
+        print(f"____________________________")
+        # for c_frame in t_array:
+        #     if abs(c_frame[0].to_sec()-i[2].to_sec()) < min_t:
+        #         cam1 = c_frame[1]
+        #         dt = abs(c_frame[0].to_sec()-i[2].to_sec())
+        # if dt:
+        #     dt_array.append(dt)
         dt_no_match_array.append(dt_no_match)
         t_array = []
         # print(dt)
         plt.cla()
-        # record time (ROS time)
+        # record time (Radar time)
         tm = i.message.time_stamp[0]/10**6
         axs.set_xlim(-50, 80)
         axs.set_ylim(0, 100)
@@ -215,8 +246,10 @@ def animate(g):
             # iterate through all tracks
             # ToDo change tracklet format so it doesn't need to iterate through all previous tracks
             for jj, ii in enumerate(trackList[:lastTrackIdx]):
+                # print(ii.BLs)
                 # get centroid
                 centroid = ii.xPost[:2]
+                speed = np.sqrt(ii.xPost[3]**2 + ii.xPost[4]**2)
                 # if track has terminated remove from tracked objects
                 if ii.endSample:
                     tracked_object[jj] = None
@@ -230,6 +263,8 @@ def animate(g):
                 elif jj in tracked_object.keys() and tracked_object[jj]:
                     tracked_object[jj].upd(((centroid[0], centroid[1]), tm))
                     axs.text(centroid[0], centroid[1] - 2, 'ID: ' + str(jj), fontsize=11,
+                             color='r')
+                    axs.text(centroid[0], centroid[1] - 5, 'ID: ' + f'{speed*3.6:.2f} km/h', fontsize=11,
                              color='r')
             # plot and update all alive tracks
             for tk, j in enumerate(alive_track[:lastTrackIdx]):
@@ -246,12 +281,12 @@ def animate(g):
             #                              view_img=False)
             # Radar projection onto camera parameters
             ry = 0
-            rz = 0
-            tx = 0
+            rz = -0.1
+            tx = 0.1
             ty = 0
-            tz = 0.1
-            rx = 1.65
-            r2c = cam_radar(rx, ry, rz, tx, ty, tz)
+            tz = 0.05
+            rx = 1.67
+            r2c = cam_radar(rx, ry, rz, tx, ty, tz, newcameramtx)
             if cls:
                 for cc in cls:
                     bbox = get_bbox_cls(cc)
@@ -276,6 +311,8 @@ plt.show()
 
 """
 Key issue
+
+Uneven sampling time
 
 Track object where each frame might have multiple detections
 Track probability not is not decreasing

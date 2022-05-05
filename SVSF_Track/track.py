@@ -542,14 +542,20 @@ class track:
             psiY_opt = linalg.pinv(linalg.pinv(EyBar)@P_Pred_21@H_1.T@S_inv @linalg.pinv(M)) #optimal smoothing boundary layer widths for unmeasured states
         
             if modelType=="CV":
+                print(psiZ_opt)
                 if psiZ_opt[0,0] < psiZ[0] and psiZ_opt[1,1] < psiZ[1]:
+                    print('using kf measured')
                     Ku = P_Pred_11@H_1.T@S_inv#KF upper gain
+
                 else:
+                    print('using svsf measured')
                     Ku = linalg.inv(H_1)@ np.diag(E_z*sat(ePred,psiZ)) @ linalg.pinv(np.diag(ePred)) #CMSVSF upper gain
             
                 if psiY_opt[0,0] <psiY[0] and psiY_opt[1,1] < psiY[1]:
+                    print('using kf not measured')
                     Kl = P_Pred_21@H_1.T@S_inv #KF lower gain
                 else:
+                    print('using svsf not measured')
                     Kl = np.diag(E_y * sat(M @ePred,psiY)) @ linalg.pinv(np.diag(M@ePred)) @ M #CMSVSF lower gain
             elif modelType=="CT":
                 if psiZ_opt[0,0] < psiZ[0] and psiZ_opt[1,1] < psiZ[1]:
