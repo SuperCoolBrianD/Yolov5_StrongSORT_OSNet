@@ -24,6 +24,16 @@ radar_d = '/radar_data'
 view=(180.0, 70.0, 250.0, ([12.0909996 , -1.04700089, -2.03249991]))
 image_np = np.empty(0)
 
+mtx = np.array([[234.45076996, 0., 334.1804498],
+                [0.,311.6748573,241.50825294],
+                [0., 0., 1.]])
+dist = np.array([[-0.06624252, -0.00059409, -0.00183169,  0.0030411,   0.00063524]])
+
+h,  w = 480, 640
+newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w,h), 1, (w,h))
+
+
+
 for j, i in enumerate(bag.read_messages()):
     # print(i.topic)
     if j < 150:
@@ -41,30 +51,31 @@ for j, i in enumerate(bag.read_messages()):
         if image_np.any():
             print('start')
 
-            rx = float(input('Input rx'))
+            # rx = float(input('Input rx'))
             # ry = float(input('Input ry'))
             # rz = float(input('Input rz'))
             # tx = float(input('Input tx'))
             # ty = float(input('Input ty'))
             # tz = float(input('Input tz'))
             ry = 0
-            rz = -0.03
-            tx = 0
+            rz = -0.1
+            tx = 0.1
             ty = 0
             tz = 0.05
-            # rx = 1.65
+            rx = 1.57
+            r2c = cam_radar(rx, ry, rz, tx, ty, tz, mtx)
 
-            img, cam_arr = render_radar_on_image(arr, image_np, rx, ry, rz, tx, ty, tz, 9000, 9000)
+            img, cam_arr = render_radar_on_image(arr, image_np, r2c, 9000, 9000)
             cv2.imshow('0', img)
             cv2.waitKey(1)
             # mlab.clf(fig)
         pc = arr[:, :4]
 
         # pc = StandardScaler().fit_transform(pc)
-        clustering = DBSCAN(eps=2, min_samples=40)
-        clustering.fit(pc)
-        label = clustering.labels_
-        cls = set_cluster(pc, label)
+        # clustering = DBSCAN(eps=2, min_samples=40)
+        # clustering.fit(pc)
+        # label = clustering.labels_
+        # cls = set_cluster(pc, label)
         # mlab.show(stop=True)
 
     # input()

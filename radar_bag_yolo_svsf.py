@@ -172,8 +172,9 @@ def animate(g):
         # crop the image
         x, y, w, h = roi
         image_np = image_np[y:y + h, x:x + w]
-        t_array.append((i[2], image_np))
-        t_no_matching = i[2]
+        cam1 = image_np
+        # t_array.append((i[2], image_np))
+        # t_no_matching = i[2]
         for tk, j in enumerate(alive_track[:lastTrackIdx]):
             if j:
                 # print(tracked_object[tk].tracklet)
@@ -184,26 +185,26 @@ def animate(g):
         # print(i[2])
         # print(i.message.time_stamp)
         # select closest image to radar frame
-        min_t = 999999999
-        dt_no_match = abs(i[2].to_sec() - t_no_matching.to_sec())
-        dt = None
-
-        radartime = radar_p_time - i.message.time_stamp[0]/10**6
-        radar_p_time = i.message.time_stamp[0]/10**6
-        ros_time = p_time - i[2].to_sec()
-        p_time = i[2].to_sec()
-        print(f"ros_time: {ros_time}")
-        print(f"radar_time: {radartime}")
-        print(f"delta lag: {abs(ros_time)-abs(radartime)}")
-        print(f"____________________________")
+        # min_t = 999999999
+        # dt_no_match = abs(i[2].to_sec() - t_no_matching.to_sec())
+        # dt = None
+        #
+        # radartime = radar_p_time - i.message.time_stamp[0]/10**6
+        # radar_p_time = i.message.time_stamp[0]/10**6
+        # ros_time = p_time - i[2].to_sec()
+        # p_time = i[2].to_sec()
+        # print(f"ros_time: {ros_time}")
+        # print(f"radar_time: {radartime}")
+        # print(f"delta lag: {abs(ros_time)-abs(radartime)}")
+        # print(f"____________________________")
         # for c_frame in t_array:
         #     if abs(c_frame[0].to_sec()-i[2].to_sec()) < min_t:
         #         cam1 = c_frame[1]
         #         dt = abs(c_frame[0].to_sec()-i[2].to_sec())
         # if dt:
         #     dt_array.append(dt)
-        dt_no_match_array.append(dt_no_match)
-        t_array = []
+        # dt_no_match_array.append(dt_no_match)
+        # t_array = []
         # print(dt)
         plt.cla()
         # record time (Radar time)
