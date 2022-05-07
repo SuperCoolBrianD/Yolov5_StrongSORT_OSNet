@@ -213,10 +213,11 @@ def animate(g):
         axs.set_ylim(0, 100)
         # convert SRS message to Numpy
         arr = convert_to_numpy(i.message.points)
+        axs.scatter(arr[:, 0], arr[:, 1], s=0.5)
         # Filter zero doppler points
         arr = filter_zero(arr)
         # draw points on plt figure
-        axs.scatter(arr[:, 0], arr[:, 1], s=0.5)
+
         pc = arr[:, :4]
         ped_box = np.empty((0, 5))
         # Perform class specific DBSCAN
