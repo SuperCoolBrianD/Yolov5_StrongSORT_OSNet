@@ -12,9 +12,12 @@ from sklearn.cluster import DBSCAN
 from sklearn.preprocessing import StandardScaler
 from radar_utils import *
 # Press the green button in the gutter to run the script.
-bag = rosbag.Bag("record/traffic3.bag")
+bag = rosbag.Bag("record/traffic1.bag")
 topics = bag.get_type_and_topic_info()
 # print(topics)
+
+def empty(v):
+    pass
 
 for i in topics[1]:
     print(i)
@@ -34,6 +37,16 @@ newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w,h), 1, (w,h))
 
 
 
+
+cv2.namedWindow('TrackBar')
+cv2.resizeWindow('TrackBar', 640, 320)
+cv2.createTrackbar('rx', 'TrackBar', 0, 300, empty)
+cv2.createTrackbar('ry', 'TrackBar', 0, 300, empty)
+cv2.createTrackbar('rz', 'TrackBar', 0, 300, empty)
+cv2.createTrackbar('tx', 'TrackBar', 0, 300, empty)
+cv2.createTrackbar('ty', 'TrackBar', 0, 300, empty)
+cv2.createTrackbar('tz', 'TrackBar', 0, 300, empty)
+
 for j, i in enumerate(bag.read_messages()):
     # print(i.topic)
     if j < 150:
@@ -48,6 +61,7 @@ for j, i in enumerate(bag.read_messages()):
         arr = filter_zero(arr)
         draw_radar(arr, fig=fig)
 
+
         if image_np.any():
             print('start')
 
@@ -57,12 +71,20 @@ for j, i in enumerate(bag.read_messages()):
             # tx = float(input('Input tx'))
             # ty = float(input('Input ty'))
             # tz = float(input('Input tz'))
-            ry = 0
-            rz = -0.1
-            tx = 0.1
-            ty = 0
-            tz = 0.05
-            rx = 1.57
+            # fx cx fy cy around
+            mtx = np.array([[234.45076996, 0., 334.1804498],
+                            [0., 311.6748573, 241.50825294],
+                            [0., 0., 1.]])
+
+            #while True:
+            rx = cv2.getTrackbarPos('rx', 'TrackBar') / 100
+            ry = cv2.getTrackbarPos('ry', 'TrackBar') / 100
+            rz = cv2.getTrackbarPos('rz', 'TrackBar') / 100
+            tx = cv2.getTrackbarPos('tx', 'TrackBar') / 100
+            ty = cv2.getTrackbarPos('ty', 'TrackBar') / 100
+            tz = cv2.getTrackbarPos('tz', 'TrackBar') / 100
+            print(rx, ry, rz, tx, ty, tz)
+
             r2c = cam_radar(rx, ry, rz, tx, ty, tz, mtx)
 
             img, cam_arr = render_radar_on_image(arr, image_np, r2c, 9000, 9000)
