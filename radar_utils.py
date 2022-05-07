@@ -69,12 +69,13 @@ def radar_cam(rx, ry, rz, tx, ty, tz):
     return r@t
 
 
-def cam_radar(rx, ry, rz, tx, ty, tz, cam_matrix):
+def cam_radar(rx, ry, rz, tx, ty, tz, c):
     cam_matrix = np.eye(4)
-    cam_matrix[0, 0] = 640
-    cam_matrix[1, 1] = 480
-    cam_matrix[0, 2] = 320
-    cam_matrix[1, 2] = 240
+    cam_matrix[:3, :3] = c
+    # cam_matrix[0, 0] = 640
+    # cam_matrix[1, 1] = 480
+    # cam_matrix[0, 2] = 320
+    # cam_matrix[1, 2] = 240
     radar_matrix = radar_cam(rx, ry, rz, tx, ty, tz)
     proj_radar2cam = cam_matrix@radar_matrix
     return proj_radar2cam
