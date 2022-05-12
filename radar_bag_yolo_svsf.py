@@ -26,8 +26,8 @@ fig.canvas.set_window_title('Radar Detection')
 # create generator object for recording
 bg = bag.read_messages()
 s = 0
-# model, device, colors, names = init_yoloR(weights='yolor/yolor_p6.pt', cfg='yolor/cfg/yolor_p6.cfg',
-#                                           names='yolor/data/coco.names', out='inference/output', imgsz=640)
+model, device, colors, names = init_yoloR(weights='yolor/yolor_p6.pt', cfg='yolor/cfg/yolor_p6.cfg',
+                                          names='yolor/data/coco.names', out='inference/output', imgsz=640)
 # adjust image visualization
 cv2.imshow('Camera', np.zeros((480, 640)))
 cv2.moveWindow('Camera', 800, 800)
@@ -279,8 +279,8 @@ def animate(g):
                         alive_track.remove(tk)
         if cam1.any():
             # yolo detection
-            # cam1, detection = detect(source=cam1, model=model, device=device, colors=colors, names=names,
-            #                              view_img=False)
+            cam1, detection = detect(source=cam1, model=model, device=device, colors=colors, names=names,
+                                         view_img=False)
             # Radar projection onto camera parameters
             ry = 0
             rz = -0.1
