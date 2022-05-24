@@ -73,7 +73,9 @@ def cam_radar(rx, ry, rz, tx, ty, tz, c):
     cam_matrix = np.eye(4)
     cam_matrix[:3, :3] = c
     radar_matrix = radar_cam(rx, ry, rz, tx, ty, tz)
+    print(radar_matrix)
     proj_radar2cam = cam_matrix@radar_matrix
+    print(cam_matrix)
     return proj_radar2cam
 
 
@@ -103,6 +105,9 @@ def render_radar_on_image(pts_radar, img, proj_radar2cam, img_width, img_height)
         cl = int(1200 / depth)
         if cl>255:
             cl=255
+        elif cl<0:
+            cl = 0
+
         color = cmap[cl, :]
         cv2.circle(img, (int(np.round(imgfov_pc_pixel[0, i])),
                          int(np.round(imgfov_pc_pixel[1, i]))),
@@ -163,11 +168,20 @@ def get_bbox(arr):
     return [x_min, y_min, x_max-x_min, y_max-y_min], np.array([[x_min, y_min, x_max, y_max, 1]])
 
 
+def get_bbox_2d(arr):
+    x_coord, y_coord, z_coord = arr[:, 0], arr[:, 1], arr[:, 2]
+    x_min = min(x_coord)-1
+    y_min = min(y_coord)-1
+    x_max = max(x_coord)+1
+    y_max = max(y_coord)+1
+    return (int(x_min), int(y_max)), (int(x_max), int(y_min))
+
+
 def get_bbox_cls(arr):
     x_coord, y_coord, z_coord = arr[:, 0], arr[:, 1], arr[:, 2]
     x_min = min(x_coord)
-    y_min = min(y_coord)
     x_max = max(x_coord)
+    y_min = min(y_coord)
     y_max = max(y_coord)
     z_min = min(z_coord)
     z_max = max(z_coord)
@@ -175,13 +189,14 @@ def get_bbox_cls(arr):
                       x_max-x_min, y_max-y_min, z_max-z_min, 0])
 
 
-def in_camera_coordinate(t1, t2, t3, l, w, h, ry, is_homogenous=False):
+
+def get_bbox_coord(t1, t2, t3, l, w, h, ry, is_homogenous=False):
     # 3d bounding box dimensions
 
     # 3D bounding box vertices [3, 8]
-    x = [l / 2, l / 2, -l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2]
-    z = [0, 0, 0, 0, -h, -h, -h, -h]
-    y = [w / 2, -w / 2, -w / 2, w / 2, w / 2, -w / 2, -w / 2, w / 2]
+    z = [l / 2, l / 2, -l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2]
+    y = [0, 0, 0, 0, -h, -h, -h, -h]
+    x = [w / 2, -w / 2, -w / 2, w / 2, w / 2, -w / 2, -w / 2, w / 2]
     box_coord = np.vstack([x, y, z])
     R = roty(ry)  # [3, 3]
     points_3d = R @ box_coord
@@ -224,7 +239,9 @@ def dbscan_cluster(pc, eps=3, min_sample=25, axs=None):
     # Init DBSCAN algorithm
     clustering = DBSCAN(eps=eps, min_samples=min_sample)
     # cluster pc
-    clustering.fit(pc)
+    mpc = pc[:, :2]
+    clustering.fit(mpc)
+
     # generate cluster label for each point
     label = clustering.labels_
     # filter cluster by label from DBSCAN

@@ -9,7 +9,8 @@ import rosbag
 from matplotlib.animation import FuncAnimation
 
 # Read recording
-bag = rosbag.Bag("record/traffic3.bag")
+bag = rosbag.Bag("record/calib_high_radar.bag")
+# bag = rosbag.Bag("record/traffic3.bag")
 # bag = rosbag.Bag("record/traffic1.bag")
 topics = bag.get_type_and_topic_info()
 
@@ -26,8 +27,8 @@ fig.canvas.set_window_title('Radar Detection')
 # create generator object for recording
 bg = bag.read_messages()
 s = 0
-model, device, colors, names = init_yoloR(weights='yolor/yolor_p6.pt', cfg='yolor/cfg/yolor_p6.cfg',
-                                          names='yolor/data/coco.names', out='inference/output', imgsz=640)
+# model, device, colors, names = init_yoloR(weights='yolor/yolor_p6.pt', cfg='yolor/cfg/yolor_p6.cfg',
+#                                           names='yolor/data/coco.names', out='inference/output', imgsz=640)
 # adjust image visualization
 cv2.imshow('Camera', np.zeros((480, 640)))
 cv2.moveWindow('Camera', 800, 800)
@@ -130,9 +131,13 @@ dt_array = []
 dt_no_match_array = []
 
 
-mtx = np.array([[234.45076996, 0., 334.1804498],
-                [0.,311.6748573,241.50825294],
+mtx = np.array([[1113.5, 0., 974.2446],
+                [0.,1113.5,586.6797],
                 [0., 0., 1.]])
+
+# mtx = np.array([[234.45076996, 0., 334.1804498],
+#                 [0.,311.6748573,241.50825294],
+#                 [0., 0., 1.]])
 dist = np.array([[-0.06624252, -0.00059409, -0.00183169,  0.0030411,   0.00063524]])
 
 h,  w = 480, 640
@@ -167,11 +172,11 @@ def animate(g):
     if i.topic == '/usb_cam/image_raw/compressed':
         np_arr = np.frombuffer(i.message.data, np.uint8)
         image_np = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-        mapx, mapy = cv2.initUndistortRectifyMap(mtx, dist, None, newcameramtx, (640, 480), 5)
-        image_np = cv2.remap(image_np, mapx, mapy, cv2.INTER_LINEAR)
-        # crop the image
-        x, y, w, h = roi
-        image_np = image_np[y:y + h, x:x + w]
+        # mapx, mapy = cv2.initUndistortRectifyMap(mtx, dist, None, newcameramtx, (640, 480), 5)
+        # image_np = cv2.remap(image_np, mapx, mapy, cv2.INTER_LINEAR)
+        # # crop the image
+        # x, y, w, h = roi
+        # image_np = image_np[y:y + h, x:x + w]
         cam1 = image_np
         # t_array.append((i[2], image_np))
         # t_no_matching = i[2]
@@ -221,14 +226,16 @@ def animate(g):
         pc = arr[:, :4]
         ped_box = np.empty((0, 5))
         # Perform class specific DBSCAN
-        total_box, cls = dbscan_cluster(pc, eps=2, min_sample=20, axs=axs)
+        total_box, cls = dbscan_cluster(pc, eps=1.5, min_sample=20, axs=axs)
         # Do pedestrian if required
         # ped_box, ped_cls = dbscan_cluster(pc, eps=2, min_sample=10)
+
         if total_box.any() and ped_box.any:
             total_box = np.vstack((total_box, ped_box))
         measSet = np.empty((0, 4))
         # KF tracking
         if cls:
+            print(len(cls))
             # convert clusters into tracking input format
             for ii in cls:
                 measSet = np.vstack((measSet, np.mean(ii, axis=0)))
@@ -279,21 +286,26 @@ def animate(g):
                         alive_track.remove(tk)
         if cam1.any():
             # yolo detection
-            cam1, detection = detect(source=cam1, model=model, device=device, colors=colors, names=names,
-                                         view_img=False)
+            # cam1, detection = detect(source=cam1, model=model, device=device, colors=colors, names=names,
+            #                              view_img=False)
             # Radar projection onto camera parameters
             ry = 0
-            rz = -0.1
+            rz = .02
             tx = 0.1
-            ty = 0
-            tz = 0.05
-            rx = 1.67
-            r2c = cam_radar(rx, ry, rz, tx, ty, tz, newcameramtx)
+            ty = 0.01
+            tz = 0.1
+            rx = 1.62
+            r2c = cam_radar(rx, ry, rz, tx, ty, tz, mtx)
             if cls:
                 for cc in cls:
                     bbox = get_bbox_cls(cc)
-                    bbox = in_camera_coordinate(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], 0)
+                    # print(bbox)
+                    bbox = get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[5], bbox[3], bbox[4], 0)
                     bbox = project_to_image(bbox, r2c)
+                    pts = project_to_image(cc.T, r2c)
+                    # print(pts)
+                    box2d = get_bbox_2d(pts.T)
+                    cv2.rectangle(cam1, box2d[0], box2d[1], (255,255,0))
                     draw_projected_box3d(cam1, bbox)
             img, cam_arr = render_radar_on_image(arr, cam1, r2c, 9000, 9000)
             cv2.imshow('Camera', img)
