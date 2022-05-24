@@ -39,6 +39,7 @@ sigma_v_filt = sigma_v #process noise standard deviation for filter
 maxVel = 27 #for initializing velocity variance for 1-point initialization
 maxAcc = 2
 omegaMax = math.radians(4) #for initializing turn-rate variance for 1-point initialization
+maxVals = [maxVel,maxAcc,omegaMax]
 numRuns =100 #number of Monte Carlo Runs
 N = int(totalTime/Ts) #number of samples in the timulation
 
@@ -531,7 +532,7 @@ for ii in range(numRuns): #for each Monte Carlo run
             else: #if no target is detected
                 measSet = np.hstack((clutterPoints1,clutterPoints2)) #full set of measurements
             #perform gating
-            trackList,unassignedMeas = gating(trackList,lastTrackIdx,PG,sensorPos,measSet,isIMM) #perform gating
+            trackList,unassignedMeas = gating(trackList,lastTrackIdx,PG, MP, maxVals,sensorPos,measSet) #perform gating
             trackList = updateStateTracks(trackList,lastTrackIdx, filterType, measSet,[], lambdaVal,MP, PG, PD, sensorPos,T, gammaZ, gammaY, psiZ, psiY, k) #update the state of each track
             trackList = updateTracksStatus(trackList,lastTrackIdx, delTenThr, delConfThr, confTenThr,k) #update the status of each track usiing the track manager
             

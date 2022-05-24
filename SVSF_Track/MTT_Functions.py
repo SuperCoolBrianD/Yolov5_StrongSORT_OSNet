@@ -454,6 +454,7 @@ def gatingSingle(xPost,P_Post,G,H,Q,R,PG,Ts,modelType,sensorPos,sensor,measSet):
 def initiateTracks(trackList,lastTrackIdx,measSet, maxVel,maxAcc,maxOmega,G,H,Q,R,modelType,Ts,pInit, startSample,sensor,N):
     #initiates a track for each measurement in measSet
     
+    isMM = False
     numMeas = measSet.shape[1]
     #trackList = []
     if numMeas!=0: #if the number of measurements in nonzero, initiate tracks 
@@ -462,7 +463,7 @@ def initiateTracks(trackList,lastTrackIdx,measSet, maxVel,maxAcc,maxOmega,G,H,Q,
             j=j+1 #index of new track
             z_i = measSet[:,i] #ith measurement 
             
-            track_j = track(z_i,G,H,Q,R,maxVel, maxAcc,maxOmega,pInit,startSample,Ts,modelType,sensor,N) #initiate jth track 
+            track_j = track(z_i,G,H,Q,R,maxVel, maxAcc,maxOmega,pInit,startSample,Ts,modelType,sensor,isMM,N) #initiate jth track 
             trackList[j] = track_j #store track at position j in trackList
            
         lastTrackIdx = j #index of last track
