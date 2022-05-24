@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-Created on Wed Mar  2 14:27:15 2022
+Created on Thu May 19 13:45:36 2022
 
-@author: salma
+@author: Salman Akhtar
 """
 
 import numpy as np
@@ -12,17 +12,18 @@ from scipy import linalg
 from scipy.linalg import sqrtm
 from MTT_Functions import*
 from track import*
+from track_MM import*
+
 
 plt.close('all')
 
 from datetime import datetime
 startTime = datetime.now()
 
-filterType="IPDAKF" #tracking algorithm
+filterType="IMMIPDAKF" #tracking algorithm
 useSVSF_G = False #use S.A. Gadsden's SVSF
-modelType = "CA" #model for tracker, only single model trackers in this program
 useNewTraj = 1 # 1 means to generate a new synthetic trajectory, 0 means to use a existing one from a file
-isIMM = False
+isIMM = True
 
 totalTime = 200 #total duration of simulation
 numTargets = 2#number of targets
@@ -37,16 +38,33 @@ L1 = .16
 L2 = .06
 sigma_v_filt = sigma_v #process noise standard deviation for filter
 maxVel = 27 #for initializing velocity variance for 1-point initialization
-maxAcc = 2
+maxAcc = 5
 omegaMax = math.radians(4) #for initializing turn-rate variance for 1-point initialization
-maxVals = [maxVel,maxAcc,omegaMax]
-numRuns =100 #number of Monte Carlo Runs
+numRuns =100
+#number of Monte Carlo Runs
 N = int(totalTime/Ts) #number of samples in the timulation
+
+
+Q_CV = np.diag([sigma_v**2,sigma_v**2,0]) #process noise co-variance for CV model
+Q_CA = np.diag([sigma_v**2,sigma_v**2,0]) #process noise co-variance for CA model
+Q_CT = np.diag([sigma_v**2,sigma_v**2, sigma_v**2]) #process noise co-variance for CT model
+
+G_CV = np.array([[(Ts**2)/2, 0,0],[0, (Ts**2)/2,0],[Ts,0,0],[0,Ts,0],[0,0,0],[0,0,0],[0,0,0]])  #input gain for CV
+G_CA = np.array([[(Ts**2)/2, 0,0],[0, (Ts**2)/2,0],[Ts,0,0],[0,Ts,0], [1,0,0],[0,1,0],[0,0,0]]) #input gain for CA
+G_CT = np.array([[(Ts**2)/2, 0,0],[0, (Ts**2)/2,0],[Ts,0,0],[0,Ts,0],[0,0,0],[0,0,0],[0,0,Ts]]) #input gain for CT
+
+G_List = [G_CV,G_CA] #input gain list
+Q_List = [Q_CV,Q_CA] #process noise co-variance list
+maxVals = [maxVel,maxAcc,omegaMax]
+pInits = [.2,.2] #initial track existence probabilities 
+uVec0 = [0.5,.5] #initial mode probabilities
+models = ["CV","CA"]
+filters = ['IPDAKF','IPDAKF']
 
 t = np.arange(0,totalTime,Ts) #time vector for simulation for plotting
 
 #Parameters for tracking in clutter
-lambdaVal = 1E-4;#parameter for clutter density
+lambdaVal = 1E-4#parameter for clutter density
 PD = .8#probability of target detection in a time step
 #PG = .9999999999999999
 PG = .9979 #gate probability
@@ -54,7 +72,7 @@ regionWidth = 100 #width of the clutter region surrounding a target
 regionLength = 100 #length of the clutter region surrounding a target
 pInit = .2 #initial probability of track existence
 
-P_ii = .999  #for Markov matrix of IPDA
+P_ii = .9999  #for Markov matrix of IPDA
 MP = np.array([[P_ii,1-P_ii],[1-P_ii,P_ii]]) #Markov matrix for IPDA
 
 #Parameters for track management
@@ -62,7 +80,7 @@ delTenThr = .05; #threshold for deleting a tenative track
 confTenThr = .9; #threshold for confirming a tenative track
 delConfThr = 0.005; #threshold for deleting a confirmed track
 
-errThr = 10 #threshold for error cases in which the track is lost
+errThr = 80 #threshold for error cases in which the track is lost
 numErrCases = 0 #counts the number of error cases
 
 sensorPos = np.array([1000,500]) #position of radar sensor 
@@ -70,82 +88,49 @@ sensor = "Lidar" #sensor type
 rangeStd = 10 #standard deviation of range for radar
 angleStd = .01 #standard deviation of angle for radar
 
-Q_CV = np.diag([sigma_v**2,sigma_v**2,0]) #process noise co-variance for CV model
-Q_CA = np.diag([sigma_v**2,sigma_v**2,0]) #process noise co-variance for CV model
-Q_CT = np.diag([sigma_v**2,sigma_v**2, sigma_v**2]) #process noise co-variance for CT model
-
 #For generating the trajectory of the 1st remote car, 7 variables below are required to obtain the ground truth trajectory
-x0_Target1 = np.array([0,0,27,27,0.5,0.5, math.radians(0)]) #initial state for the 1st target
-covListTarget1 = Q_CA #each entry is the process noise co-variance for each segment
-xVelListTarget1 = 0 #if the velocity has to change to a specific value in a segment, change that
-yVelListTarget1 = 0
-xAccListTarget1 = 0.5 #if the velocity has to change to a specific value in a segment, change that
-yAccListTarget1 = 0.5
-omegaListTarget1 = math.radians(0) #turn-rate for each segment
-modelListTarget1 = 'CA' # model for each segment
-timesTarget1 =150 #time at which each segment concludes
+x0_Target1 = np.array([0,0,27,27,0,0, math.radians(0)]) #initial state for the 1st target
+covListTarget1 = [Q_CV,Q_CA] #each entry is the process noise co-variance for each segment
+xVelListTarget1 = [0, 0] #if the velocity has to change to a specific value in a segment, change that
+yVelListTarget1 = [0,0]
+xAccListTarget1 = [0,1]
+yAccListTarget1 = [0,1]
+omegaListTarget1 = [math.radians(0),math.radians(0)] #turn-rate for each segment
+modelListTarget1 = ['CV','CA'] # model for each segment
+timesTarget1 = [50,150] #time at which each segment concludes
 
-t1_start = 3 #time in which target 1 appears
-
-if isinstance(covListTarget1, list)==False:
-    t1_end = timesTarget1
-else:
-    t1_end = timesTarget1[-1] #time in which target 1 disappears
-    
+t1_start = 0 #time in which target 1 appears
+t1_end = timesTarget1[-1] #time in which target 1 disappears
 t1_startSample = int(t1_start/Ts) #sample number in which target 1 appears
 t1_endSample = int(t1_end/Ts) #sample number in which target 2 disappears
 N_t1 = t1_endSample-t1_startSample+1 #number of samples for the period in which the target is present
 
 #For 2nd remote car
-x0_Target2 = np.array([-100,-100,-25,-25,-0.5,-0.5, math.radians(0)])
-covListTarget2 = Q_CA
-xVelListTarget2 = 0
-yVelListTarget2 = 0
-xAccListTarget2 = -0.5 #if the velocity has to change to a specific value in a segment, change that
-yAccListTarget2 = -0.5
-omegaListTarget2 =math.radians(0)
-modelListTarget2 = 'CA'
-timesTarget2 = 130
+x0_Target2 = np.array([-500,-500,-25,-25,0,0, math.radians(0)])
+covListTarget2 = [Q_CV,Q_CA]
+xVelListTarget2 = [0, 0]
+yVelListTarget2 = [0,0]
+xAccListTarget2= [0,-1]
+yAccListTarget2 = [0,-1]
+omegaListTarget2 =[math.radians(0),math.radians(0)]
+modelListTarget2 = ['CV','CA']
+timesTarget2 = [100,150]
 
 t2_start = 20
-
-if isinstance(covListTarget2, list)==False:
-    t2_end = timesTarget2
-else:
-    t2_end = timesTarget2[-1] #time in which target 1 disappears
-
+t2_end = timesTarget2[-1]
 t2_startSample = int(t2_start/Ts)
 t2_endSample = int(t2_end/Ts)
 N_t2 =t2_endSample  -t2_startSample+1
 
-#Filter parameters
-if modelType=="CV":
-    Q = np.diag(np.array([sigma_v_filt**2,sigma_v_filt**2,0**2]))
-    G = np.array([[(Ts**2)/2, 0,0],[0, (Ts**2)/2,0],[Ts,0,0],[0,Ts,0],[0,0,0],[0,0,0],[0,0,0]]) 
-    ''''
-    Q_CV = L1*np.array([[(Ts**3)/3, 0, (Ts**2)/2, 0, 0],
-                     [0,(Ts**3)/3, 0, (Ts**2)/2, 0 ],
-                     [(Ts**2)/2, 0, Ts, 0, 0],
-                     [0, (Ts**2)/2, 0, Ts, 0],
-                    [0, 0, 0, 0, 0]])
-    #Q=Q_CV
-    '''
-elif modelType=="CA":
-    Q = np.diag(np.array([sigma_v_filt**2,sigma_v_filt**2,0**2]))
-    G = np.array([[(Ts**2)/2, 0,0],[0, (Ts**2)/2,0],[Ts,0,0],[0,Ts,0], [1,0,0],[0,1,0],[0,0,0]]) 
-    
-elif modelType=="CT":
-    Q = np.diag(np.array([sigma_v_filt**2,sigma_v_filt**2,sigma_v_filt**2]))
-    G = np.array([[(Ts**2)/2, 0,0],[0, (Ts**2)/2,0],[Ts,0,0],[0,Ts,0],[0,0,0],[0,0,0],[0,0,Ts]])
-    '''
-    Q_CT = L1*np.array([[(Ts**3)/3, 0, (Ts**2)/2, 0, 0],
-                     [0,(Ts**3)/3, 0, (Ts**2)/2, 0 ],
-                     [(Ts**2)/2, 0, Ts, 0, 0],
-                     [0, (Ts**2)/2, 0, Ts, 0],
-                    [0, 0, 0, 0, (L2/L1)*Ts]])
-    #Q=Q_CT
-    '''
-    
+Q_CV = np.diag(np.array([sigma_v_filt**2,sigma_v_filt**2,0**2]))
+G_CV = np.array([[(Ts**2)/2, 0,0],[0, (Ts**2)/2,0],[Ts,0,0],[0,Ts,0],[0,0,0],[0,0,0],[0,0,0]]) 
+
+Q_CA = np.diag(np.array([sigma_v_filt**2,sigma_v_filt**2,0**2]))
+G_CA = np.array([[(Ts**2)/2, 0,0],[0, (Ts**2)/2,0],[Ts,0,0],[0,Ts,0], [1,0,0],[0,1,0],[0,0,0]]) 
+
+Q_CT = np.diag(np.array([sigma_v_filt**2,sigma_v_filt**2,sigma_v_filt**2]))
+G_CT = np.array([[(Ts**2)/2, 0,0],[0, (Ts**2)/2,0],[Ts,0,0],[0,Ts,0],[0,0,0],[0,0,0],[0,0,Ts]])
+
 if useSVSF_G==True: #use S.A. Gadsden's SVSF
     #requires the number of states to equal the number of measurements
     R = np.diag(np.array([sigma_w**2,sigma_w**2, sigmaVel**2, sigmaVel**2, sigmaOmega**2])) #measurement co-variance
@@ -175,116 +160,42 @@ if useSVSF_G==True: #parameters for S.A.Gadsden's SVSF
     psiY = np.array([170.0,170.0,561.0])
 else:
     #Parameters for the m<n SVSF, where m=# of measurements and n=# of states
-    
-    #gammaZ=0.0039*np.eye(2)
-    #gammaY=0.0039*np.eye(3)
-    #psiZ = np.array([1769.0,1769.0])
-    #psiY = np.array([993.0,993.0,435.0])
-    
-    
-    ##Best for CT
-    #gammaZ=0.1*np.eye(m)
-   # gammaY=0.1*np.eye(n-m)
-   # psi1 = 1769.0
-    #psi2 = 993.0
-    #psi3 = 435.0
-    #psi1 = 11
-    #psi2 = 11
-    #psi3 =300
-    #gammaZ =0.56*np.eye(m)
-    #gammaY = 0.56*np.eye(n-m)
-    
-    #psi1 = 10
-    #psi2 = 10
-    #psi3 = 1000
-    #gammaZ =0.1*np.eye(m)
-    #gammaY = 0.1*np.eye(n-m)
-    """
-    psi1 = 10
-    psi2 = 100
-    psi3 = 100
-    gammaZ = .1*np.eye(m)
-    gammaY = .1*np.eye(n-m)
-    """
-    
-    #psi1= 657.0
-    '''
-    psi1 = 10
-    psi2 = 20
-    psi3 = 20
-    gammaZ = 0.8*np.eye(m)
-    gammaY = 0.8*np.eye(n-m)
-    '''
-    '''
-    psi1 = math.inf
-    psi2 = math.inf
-    psi3 = math.inf
-    gammaZ = .1*np.eye(m)
-    gammaY = .1*np.eye(n-m)
-    '''
-    
-    '''
-    psi1 = 10*5
-    psi2 = 75*2
-    psi3 = 75
-    gammaZ = 0.9*np.eye(m)
-    gammaY = 0.9*np.eye(n-m)
-    '''
-    
     psi1 = 5
     psi2 = 50
     psi3 = 100
     gammaZ = .9*np.eye(m)
     gammaY = .9*np.eye(n-m)
     
-    ##Best for CV
-    '''
-    gammaZ = 0.778*np.eye(m)
-    gammaY = 0.778*np.eye(n-m)
-    psi1 = 9333.0
-    psi2 = 40.0
-    psi3 = 10 #arbitrary 
-    '''
-    
     psiZ = np.array([psi1,psi1])
     psiY = np.array([psi2,psi2,psi3])
     
-#generate true trajectories of targets
 if useNewTraj==1:
     startSampleT1 = int(t1_start/Ts) 
     startSampleT2 = int(t2_start/Ts)
     
     xTargetCarTraj1 = generateTrajectory(x0_Target1, modelListTarget1, xVelListTarget1, yVelListTarget1, xAccListTarget1, yAccListTarget1, omegaListTarget1, timesTarget1, covListTarget1,startSampleT1, Ts,N)[0]
-    xTargetCarTraj2 = generateTrajectory(x0_Target2, modelListTarget2, xVelListTarget2, yVelListTarget2, xAccListTarget2, yAccListTarget2, omegaListTarget2, timesTarget2, covListTarget2,startSampleT2, Ts,N)[0]
-    
-    """
-    x0 = outputVec
-    times = [timesEgo[1]-t_0,timesEgo[2]-t_0, timesEgo[3]-t_0]
-    covList = [Q_CT,Q_CT,Q_CT]
-    omegaList = [math.radians(4),math.radians(4),math.radians(4)]
-    modelList = ["CT","CT","CT"]
-    xVelList = [0,0,0]
-    yVelList = [0,0,0]
-    xPosEgo = xEgoCarTraj[0,:]
-    yPosEgo = xEgoCarTraj[1,:]
-    """
+    xTargetCarTraj2 = generateTrajectory(x0_Target2, modelListTarget2, xVelListTarget2, yVelListTarget2,  xAccListTarget2, yAccListTarget2, omegaListTarget2, timesTarget2, covListTarget2,startSampleT2, Ts,N)[0]
 else:
     #xTrue =np.loadtxt('trueTraj3_Ts_1.txt', dtype=float)
     xEgoCarTraj = np.loadtxt('EgoCarTraj2.txt', dtype=float) #use saved trajectory from a .txt file
-    
+
 #ground truth x position, y position, x velocity, y velocity, and turn-rate for target 1
 xPosTrue1 = xTargetCarTraj1[0,:][t1_startSample:t1_endSample+1] #ground truth X position
 yPosTrue1 = xTargetCarTraj1[1,:][t1_startSample:t1_endSample+1] #ground truth Y position
 xVelTrue1 = xTargetCarTraj1[2,:][t1_startSample:t1_endSample+1] #ground truth X velocity
 yVelTrue1 = xTargetCarTraj1[3,:][t1_startSample:t1_endSample+1] #ground truth Y velocity
-omegaTrue1 = xTargetCarTraj1[4,:][t1_startSample:t1_endSample+1] #ground truth turn-rate
+xAccTrue1 = xTargetCarTraj1[4,:][t1_startSample:t1_endSample+1] #ground truth X acceleration
+yAccTrue1 = xTargetCarTraj1[5,:][t1_startSample:t1_endSample+1] #ground truth Y acceleration
+omegaTrue1 = xTargetCarTraj1[6,:][t1_startSample:t1_endSample+1] #ground truth turn-rate
 
 #ground truth x position, y position, x velocity, y velocity, and turn-rate for target 2
 xPosTrue2 = xTargetCarTraj2[0,:][t2_startSample:t2_endSample+1]
 yPosTrue2 = xTargetCarTraj2[1,:][t2_startSample:t2_endSample+1]
 xVelTrue2 = xTargetCarTraj2[2,:][t2_startSample:t2_endSample+1]
 yVelTrue2 = xTargetCarTraj2[3,:][t2_startSample:t2_endSample+1]
-omegaTrue2 = xTargetCarTraj2[4,:][t2_startSample:t2_endSample+1]
+xAccTrue2 = xTargetCarTraj2[4,:][t2_startSample:t2_endSample+1] #ground truth X acceleration
+yAccTrue2 = xTargetCarTraj2[5,:][t2_startSample:t2_endSample+1] #ground truth Y acceleration
+omegaTrue2 = xTargetCarTraj2[6,:][t2_startSample:t2_endSample+1]
 
 #initial ground truth states
 x_01 = xTargetCarTraj1[:,0] 
@@ -305,15 +216,18 @@ errPosPlotsX1 = np.zeros((numRuns,N_t1)) #each row stores the estimation error f
 errPosPlotsY1 = np.zeros((numRuns,N_t1)) #each row stores the estimation error for Y position
 errVelPlotsX1 = np.zeros((numRuns,N_t1))  #each row stores the estimation error for X velocity
 errVelPlotsY1 = np.zeros((numRuns,N_t1)) #each row stores the estimation error for Y velocity
+errAccPlotsX1 = np.zeros((numRuns,N_t1))  #each row stores the estimation error for X acceleration
+errAccPlotsY1 = np.zeros((numRuns,N_t1)) #each row stores the estimation error for Y accleration
 errOmegaPlots1 = np.zeros((numRuns,N_t1))  #each row stores the estimation error for turn-rate
 
 errPosPlotsX2 = np.zeros((numRuns,N_t2))
 errPosPlotsY2 = np.zeros((numRuns,N_t2))
 errVelPlotsX2 = np.zeros((numRuns,N_t2))
 errVelPlotsY2 = np.zeros((numRuns,N_t2))
+errAccPlotsX2 = np.zeros((numRuns,N_t2))  #each row stores the estimation error for X acceleration
+errAccPlotsY2 = np.zeros((numRuns,N_t2)) #each row stores the estimation error for Y accleration
 errOmegaPlots2 = np.zeros((numRuns,N_t2))
 
-RMSEs = np.zeros((n,numRuns)) #computes the scalar RMSE for each run
 
 j=0
 jj1 = 0
@@ -324,11 +238,14 @@ jj2 = 0
 numErrCasesT1=0 
 numErrCasesT2=0
 
-#Tracking Loop
-for ii in range(numRuns): #for each Monte Carlo run
-    trackList = [0]*8000 #allocate track list, a list of objects
-    lastTrackIdx = -1 #index of a track in the list,
+RMSEs_T1 = np.zeros((2,numRuns)) #computes the scalar RMSE for each run
+RMSEs_T2 = np.zeros((2,numRuns)) #computes the scalar RMSE for each run
 
+#Tracking Loop
+for ii in range(numRuns): #for each Monte Carlo run    
+    trackList = [0]*8000 #allocate track list, a list of objects
+    lastTrackIdx = -1 #index of a track in the list,    
+    
     if t1_start == 0 or t2_start==0: #if the any target exists at the initial frame/sample, obtain their measurement
         if sensor=="Radar": #for radar case
             #xS = sensorPos[0]
@@ -372,16 +289,17 @@ for ii in range(numRuns): #for each Monte Carlo run
             ePost0 = z0 - np.array([r0,angle0])
         else: #for Lidar case
             if m!=n: #if m<n, generate initial measurement of the target
-                z0 = H@x0 + np.random.multivariate_normal(np.array([0,0]),R)
+                z0 = H@x_01 + np.random.multivariate_normal(np.array([0,0]),R)
                 #z0 = H@x0 + np.random.normal(0,sigma_w,2)
             else: #if m=n, which is when using S.A. Gadsden's SVSF
                 z0 = H[0:2,0:2]@x0[0:2] + np.random.multivariate_normal(np.array([0,0]),R[0:2,0:2])
                 z0 = np.array([z0[0],z0[1],0,0,0])
- 
-        track1  = track(z0,G,H,Q,R,maxVel,maxAcc,omegaMax, pInit,0,Ts,modelType,sensor,N) #initalize the track
-        trackList[0] = track1
-        lastTrackIdx=lastTrackIdx+1
-    
+            targetMeas = z0
+            targetMeas.shape = (m,1)
+        #track1_MM = track_MM(z0,G_List,H,Q_List,R,maxVals,pInit,0,Ts,models,filters,sensor,N)
+        #trackList[0] = track1_MM
+        #lastTrackIdx=lastTrackIdx+1
+        
     #initial clutter points in the specified coverage regions
     xMin = x_01[0] - round(regionWidth/2) # x range of region around target 1, x_01[0] is the initial X position, x_01[1] is the initial Y position
     xMax = x_01[0] + round(regionWidth/2)
@@ -393,29 +311,25 @@ for ii in range(numRuns): #for each Monte Carlo run
     xLims1 = [xMin,xMax] #info for the coverage region around target 1
     yLims1 = [yMin,yMax]
     
-    xMin = x_02[0] - round(regionWidth/2) #around target 2, x_02[0] is the initial X position, x_02[1] is the initial Y position
-    xMax = x_02[0] + round(regionWidth/2)
-    
-    yMin = x_02[1] - round(regionLength/2)# y range of region around target 1
-    yMax = x_02[1] + round(regionLength/2)
-    
-    xLims2 = [xMin,xMax] #info for the coverage region around target 2
-    yLims2 = [yMin,yMax]
-    
     clutterPoints1 = generateClutter(xLims1, yLims1, lambdaVal) #generate clutter around target 1
-    clutterPoints2 = generateClutter(xLims2, yLims2, lambdaVal) #generate clutter around target 2
     
-    unassignedMeas0 = np.hstack((clutterPoints1,clutterPoints2)) #full set of unassigned measurements
+    if numTargets>1:
+        xMin = x_02[0] - round(regionWidth/2) #around target 2, x_02[0] is the initial X position, x_02[1] is the initial Y position
+        xMax = x_02[0] + round(regionWidth/2)
+        
+        yMin = x_02[1] - round(regionLength/2)# y range of region around target 1
+        yMax = x_02[1] + round(regionLength/2)
+        
+        xLims2 = [xMin,xMax] #info for the coverage region around target 2
+        yLims2 = [yMin,yMax]    
+        clutterPoints2 = generateClutter(xLims2, yLims2, lambdaVal) #generate clutter around target 2
+        unassignedMeas0 = np.hstack((clutterPoints1,clutterPoints2,targetMeas)) #full set of unassigned measurements
+    else:
+        unassignedMeas0 = np.hstack((clutterPoints1,targetMeas)) #full set of unassigned measurements
     
-    #initial tracks, each unassigned measurement initiate a track
-    trackList,lastTrackIdx = initiateTracks(trackList,lastTrackIdx, unassignedMeas0,  maxVel, maxAcc, omegaMax, G, H, Q, R, modelType, Ts, pInit, 0, sensor, N)
-
-    #estTraj = np.zeros((n,N))
-    #estTraj[:,0] = track1.xPost
-
-    #zkPrev = z0    
-    T1_Detected = 0
-    T2_Detected = 0
+    #initial tracks, each unassigned measurement initiates a track
+    trackList,lastTrackIdx = initiateTracksMM(trackList,lastTrackIdx, unassignedMeas0, maxVals, G_List, H, Q_List, R, models,filters, Ts, pInit, 0, sensor, N)
+    
     
     for k in range(1,N): #for each sample/frame/scan
         t_k = t[k] #current time in simulation
@@ -423,7 +337,7 @@ for ii in range(numRuns): #for each Monte Carlo run
         T2_Present = (t_k>=t2_start and t_k<=t2_end) #check if target 2 is present
         
         T1_Detected = 0
-        T2_Detected = 0   
+        T2_Detected = 0       
         
         for i in range(numTargets):
             if  (T1_Present and i==0) or (T2_Present and i==1): #if any target is present
@@ -436,6 +350,7 @@ for ii in range(numRuns): #for each Monte Carlo run
                         x_k= xTargetCarTraj2[:,k]
                         T2_Detected = 1
     
+                    #Obtain the measurement
                     if sensor=="Radar":
                         xk_EgoCar = xEgoCarTraj[:,k]
                         rangeMeas = getRange(x_k, sensorPos) + np.random.normal(0,rangeStd,1) #obtain radar measurement
@@ -465,17 +380,22 @@ for ii in range(numRuns): #for each Monte Carlo run
                             #z_k = H@x_k +  np.random.multivariate_normal(np.array([0,0]),R) #recieve measurement
                             z_k = H@x_k + np.random.normal(0,sigma_w,2)
                             
-                            if i==0 :
-                                z_k1 = z_k #if target 1, store z_k into z_k1
-                            else:
-                                z_k2 = z_k #if target 2, store z_k into z_k2
-                else:
-                   # z_k =  np.array([math.inf,math.inf])#if no target is detected
+                        #save measurement
+                        if i==0 :
+                            z_k1 = z_k #if target 1, store z_k into z_k1
+                        else:
+                            z_k2 = z_k #if target 2, store z_k into z_k2
+                            
+                '''
+                else: #if no target is detected
+                    #z_k =  np.array([math.inf,math.inf])#if no target is detected
                     if i==0:
                         T1_Detected=0
                     elif i==1:
                         T2_Detected=0
-                    
+                 '''       
+                        
+            
         if T1_Present==True and T2_Present==False:
             if T1_Detected==0:
                 targetMeas = [] #if target 1 is present but not detected, make the targetMeas array empty
@@ -486,6 +406,7 @@ for ii in range(numRuns): #for each Monte Carlo run
                 targetMeas = [] #if target 2 is present but not detected, make the array empty
             else:
                 targetMeas = np.expand_dims(z_k2,axis=-1) #if present and detected, store its measurement into targetMeas
+            
         elif T1_Present==True and T2_Present==True: 
             if T1_Detected==1 and T2_Detected==1: #if both targets are present and detected, store their measurements into targetMeas
                 targetMeas = np.hstack((np.expand_dims(z_k2,axis=-1) ,np.expand_dims(z_k1,axis=-1) ))
@@ -493,59 +414,63 @@ for ii in range(numRuns): #for each Monte Carlo run
                 targetMeas = np.expand_dims(z_k1,axis=-1) #if both targets are present, but only target 1 is detected 
             elif T1_Detected==0 and T2_Detected==1:
                 targetMeas = np.expand_dims(z_k2,axis=-1) #if both targets are present, but only target 2 is detected
-            else:
+            else: #if both targets are presented and both are not detected, make the array empty
                 targetMeas = []
-        else:
+        else: #if no target is present, make targetMeas empty
             targetMeas = []
-                            
-        if filterType == "PDAKF" or filterType == "IPDAKF" or filterType=="IPDASVSF" or  filterType == "IPDAGVBLSVSF":
-            #Generate clutter     
-            for i in range(numTargets):
-                if i==0:
-                    x_k = xTargetCarTraj1[:,k] #true state of target 1
-                    #z_k = z_k1
-                elif i==1:
-                    x_k = xTargetCarTraj2[:,k] #true state of target 2
-                    #z_k = z_k2
             
-                sensorPos = np.array([x_k[0],x_k[1]]) #for radar, set at the same position of the target
+        for i in range(numTargets): #generate clutter around each target
+            if i==0:
+                x_k = xTargetCarTraj1[:,k] #true state of target 1
+                #z_k = z_k1
+            elif i==1:
+                x_k = xTargetCarTraj2[:,k] #true state of target 2
+                #z_k = z_k2
+        
+            sensorPos = np.array([x_k[0],x_k[1]]) #for radar, set at the same position of the target
+            
+            #generate region, xMin is the min. x in the region, xMax is the max x. in the region, yMin is the min. y, and yMax is the max. y in the region
+            #x_k[0] and x_k[1] denote the X and Y position of the target
+            xMin = x_k[0] - round(regionWidth/2) 
+            xMax = x_k[0] + round(regionWidth/2)
+        
+            yMin = x_k[1] - round(regionLength/2)
+            yMax = x_k[1] + round(regionLength/2)
+            
+            xLims = [xMin,xMax]
+            yLims = [yMin,yMax]
+            
+            clutterPoints = generateClutter(xLims, yLims, lambdaVal) #generate clutter points
+            if i==0:
+                clutterPoints1 = clutterPoints #clutter points around target 1
                 
-                #generate region, xMin is the min. x in the region, xMax is the max x. in the region, yMin is the min. y, and yMax is the max. y in the region
-                #x_k[0] and x_k[1] denote the X and Y position of the target
-                xMin = x_k[0] - round(regionWidth/2) 
-                xMax = x_k[0] + round(regionWidth/2)
+                if numTargets==1:
+                    clutterPoints2 = np.zeros((2,0))
+            else:
+                clutterPoints2 = clutterPoints #clutter points around target 2
+                if numTargets==1:
+                    clutterPoints1 =np.zeros((2,0))
             
-                yMin = x_k[1] - round(regionLength/2)
-                yMax = x_k[1] + round(regionLength/2)
-                
-                xLims = [xMin,xMax]
-                yLims = [yMin,yMax]
-                
-                clutterPoints = generateClutter(xLims, yLims, lambdaVal) #generate clutter points
-                if i==0:
-                    clutterPoints1 = clutterPoints #clutter points around target 1
-                else:
-                    clutterPoints2 = clutterPoints #clutter points around target 2
-            
-            if isinstance(targetMeas, list)==False: #if a target is detected
-                measSet = np.hstack((clutterPoints1,clutterPoints2,targetMeas)) #full set of measurements
-            else: #if no target is detected
-                measSet = np.hstack((clutterPoints1,clutterPoints2)) #full set of measurements
-            #perform gating
-            trackList,unassignedMeas = gating(trackList,lastTrackIdx,PG, MP, maxVals,sensorPos,measSet) #perform gating
-            trackList = updateStateTracks(trackList,lastTrackIdx, filterType, measSet,[], lambdaVal,MP, PG, PD, sensorPos,T, gammaZ, gammaY, psiZ, psiY, k) #update the state of each track
-            trackList = updateTracksStatus(trackList,lastTrackIdx, delTenThr, delConfThr, confTenThr,k) #update the status of each track usiing the track manager
-            
-            #initiate tracks for measurements that were not gated or in other words unassigned measurements
-            trackList,lastTrackIdx = initiateTracks(trackList,lastTrackIdx,unassignedMeas,  maxVel, maxAcc, omegaMax, G, H, Q, R, modelType, Ts, pInit, k, sensor, N)
-   
+        if isinstance(targetMeas, list)==False: #if a target is detected
+            measSet = np.hstack((clutterPoints1,clutterPoints2,targetMeas)) #full set of measurements
+        else: #if no target is detected
+            measSet = np.hstack((clutterPoints1,clutterPoints2)) #full set of measurements
+     
+        trackList, unassignedMeas = gating(trackList,lastTrackIdx, PG, MP, maxVals,sensorPos,measSet) #perform gating
+        trackList = updateStateTracks(trackList,lastTrackIdx, filterType, measSet, maxVals, lambdaVal,MP, PG, PD, sensorPos,T, gammaZ, gammaY, psiZ, psiY, k) #update the state of each track
+        trackList = updateTracksStatus(trackList,lastTrackIdx, delTenThr, delConfThr, confTenThr,k) #update the status of each track usiing the track manager
+        
+        
+        #initiate tracks for measurements that were not gated or in other words unassigned measurements
+        trackList,lastTrackIdx = initiateTracksMM(trackList,lastTrackIdx, unassignedMeas, maxVals, G_List, H, Q_List, R, models,filters, Ts, pInit, k, sensor, N)
+
     numTracks = lastTrackIdx+1 #total number of tracks
     
     for i in range(numTracks): #loop through the track list
         status = trackList[i].status
         if status==1 or status==2: #if the track is tenative or confirmed, set the endSample property to the last sample, which is the value of k at the end of the loop above
             trackList[i].endSample = k
-    
+            
     for j in range(numTracks): #loop through each track
         isTrack1 = abs(t1_startSample - trackList[j].startSample) <8 #Boolean value, associate track to target 1 if the startSample is close to the true start sample
         isTrack2 = abs(t2_startSample - trackList[j].startSample) <8 #Boolean value, associate track to target 2 if the startSample is close to the true start sample
@@ -556,16 +481,26 @@ for ii in range(numRuns): #for each Monte Carlo run
                                                                 #obtain its state estimates
             xEsts = trackList[j].xEsts
             
+            
             if isTrack1==True: #if a track is associated to target 1
+                latency = trackList[j].startSample - t1_startSample
+            
+            
                 xPosEst = xEsts[0,:][t1_startSample:t1_endSample+1] #Obtain estimated positions and velocities
                 yPosEst = xEsts[1,:][t1_startSample:t1_endSample+1] 
                 xVelEst = xEsts[2,:][t1_startSample:t1_endSample+1] 
                 yVelEst = xEsts[3,:][t1_startSample:t1_endSample+1] 
+                xAccEst = xEsts[4,:][t1_startSample:t1_endSample+1] 
+                yAccEst = xEsts[5,:][t1_startSample:t1_endSample+1] 
+                omegaEst = xEsts[6,:][t1_startSample:t1_endSample+1] 
 
                 xPosRMSE = computeRMSE(xPosTrue1, xPosEst) #get RMSE
                 yPosRMSE = computeRMSE(yPosTrue1, yPosEst)
                 
-                BLs_T1 = trackList[j].BLs
+                rmseVec = np.array([xPosRMSE,yPosRMSE])
+                RMSEs_T1[:,ii] = rmseVec
+                
+#                BLs_T1 = trackList[j].BLs
                 
                 if xPosRMSE > errThr or yPosRMSE > errThr:
                     numErrCasesT1 = numErrCasesT1+1 #ignore runs with high error
@@ -573,28 +508,44 @@ for ii in range(numRuns): #for each Monte Carlo run
                     np.delete(errPosPlotsY1,jj1,axis=0)
                     np.delete(errVelPlotsX1,jj1,axis=0)
                     np.delete(errVelPlotsY1,jj1,axis=0)
+                    np.delete(errAccPlotsX1,jj1,axis=0)
+                    np.delete(errAccPlotsY1,jj1,axis=0)
                     np.delete(errOmegaPlots1,jj1,axis=0)
                 else:
                     xPosErr = xPosEst-xPosTrue1 #find error in each state
                     yPosErr = yPosEst-yPosTrue1
                     xVelErr = xVelEst-xVelTrue1
                     yVelErr = yVelEst-yVelTrue1
+                    xAccErr = xAccEst-xAccTrue1
+                    yAccErr = yAccEst-yAccTrue1
+                    omegaErr = omegaEst-omegaTrue1
                     
                     errPosPlotsX1[jj1,:] = xPosErr #store errors in the array containing the errors from each run
                     errPosPlotsY1[jj1,:] = yPosErr
                     errVelPlotsX1[jj1,:] = xVelErr
                     errVelPlotsY1[jj1,:] = yVelErr
+                    errAccPlotsX1[jj1,:] = xAccErr
+                    errAccPlotsY1[jj1,:] = yAccErr
+                    errOmegaPlots1[jj1,:] = omegaErr
                     jj1=jj1+1
             elif isTrack2==True:
+                latency = trackList[j].startSample - t2_startSample
+                
                 xPosEst = xEsts[0,:][t2_startSample:t2_endSample+1] #Obtain estimated positions and velocities
                 yPosEst = xEsts[1,:][t2_startSample:t2_endSample+1] 
                 xVelEst = xEsts[2,:][t2_startSample:t2_endSample+1] 
                 yVelEst = xEsts[3,:][t2_startSample:t2_endSample+1] 
+                xAccEst = xEsts[4,:][t2_startSample:t2_endSample+1] 
+                yAccEst = xEsts[5,:][t2_startSample:t2_endSample+1] 
+                omegaEst = xEsts[6,:][t2_startSample:t2_endSample+1] 
 
                 xPosRMSE = computeRMSE(xPosTrue2, xPosEst)
                 yPosRMSE = computeRMSE(yPosTrue2, yPosEst)
                 
-                BLs_T2 = trackList[j].BLs
+                rmseVec = np.array([xPosRMSE,yPosRMSE])
+                RMSEs_T2[:,ii] = rmseVec
+                
+#                BLs_T2 = trackList[j].BLs
 
                
                 if xPosRMSE > errThr or yPosRMSE > errThr:
@@ -603,98 +554,38 @@ for ii in range(numRuns): #for each Monte Carlo run
                     np.delete(errPosPlotsY2,jj2,axis=0)
                     np.delete(errVelPlotsX2,jj2,axis=0)
                     np.delete(errVelPlotsY2,jj2,axis=0)
+                    np.delete(errAccPlotsX2,jj2,axis=0)
+                    np.delete(errAccPlotsY2,jj2,axis=0)
                     np.delete(errOmegaPlots2,jj2,axis=0)
                 else:
                     xPosErr = xPosEst-xPosTrue2#find error in each state
                     yPosErr = yPosEst-yPosTrue2
                     xVelErr = xVelEst-xVelTrue2
                     yVelErr = yVelEst-yVelTrue2
+                    xAccErr = xAccEst-xAccTrue2
+                    yAccErr = yAccEst-yAccTrue2
+                    omegaErr = omegaEst-omegaTrue2
                     
                     errPosPlotsX2[jj2,:] = xPosErr#Obtain estimated positions and velocities
                     errPosPlotsY2[jj2,:] = yPosErr
                     errVelPlotsX2[jj2,:] = xVelErr
                     errVelPlotsY2[jj2,:] = yVelErr
+                    errAccPlotsX2[jj2,:] = xAccErr
+                    errAccPlotsY2[jj2,:] = yAccErr
+                    errOmegaPlots2[jj2,:] = omegaErr
                     jj2=jj2+1
-        
-        
-#        estTraj[:,k]=xPost
- #       zkPrev = z_k
-    """
-    xPosRMSE = computeRMSE(xPosTrue, xPosEst)
-    yPosRMSE = computeRMSE(yPosTrue, yPosEst)
-    xVelRMSE = computeRMSE(xVelTrue, xVelEst) 
-    yVelRMSE = computeRMSE(yVelTrue, yVelEst)
-    omegaRMSE = computeRMSE(omegaTrue, omegaEst)
-    
-    rmseVec = np.array([xPosRMSE,yPosRMSE, xVelRMSE, yVelRMSE, omegaRMSE])
+                    
 
-    errPosX = xPosEst-xPosTrue #Obtain errors
-    errPosY = yPosEst-yPosTrue
-    errVelX = xVelEst-xVelTrue
-    errVelY = yVelEst-yVelTrue
-    errOmega = omegaEst - omegaTrue
-    
-    if xPosRMSE > errThr or yPosRMSE > errThr:
-        numErrCases = numErrCases+1 #ignore runs with high error
-        np.delete(errPosPlotsX,j,axis=0)
-        np.delete(errPosPlotsY,j,axis=0)
-        np.delete(errVelPlotsX,j,axis=0)
-        np.delete(errVelPlotsY,j,axis=0)
-        np.delete(errOmegaPlots,j,axis=0)
-    else:
-        errPosPlotsX[j,:] = errPosX #store errors
-        errPosPlotsY[j,:] = errPosY
-        errVelPlotsX[j,:] = errVelX
-        errVelPlotsY[j,:] = errVelY
-        errOmegaPlots[j,:] = errOmega
-        
-        j=j+1
-    
-    RMSEs[:,i] = rmseVec
-    """
-        
 rmsePlotPos1,xPosRMSE1,yPosRMSE1,posRMSE1 = RMSEPlot(errPosPlotsX1,errPosPlotsY1)
 rmsePlotVel1,xVelRMSE1,yVelRMSE1,velRMSE1 = RMSEPlot(errVelPlotsX1,errVelPlotsY1)
+rmsePlotAcc1,xAccRMSE1,yAccRMSE1,accRMSE1 = RMSEPlot(errAccPlotsX1,errAccPlotsY1)
 rmsePlotOmega1,omegaRMSE1,_,_ = RMSEPlot(errOmegaPlots1,np.zeros((numRuns,N)))
 
 rmsePlotPos2,xPosRMSE2,yPosRMSE2,posRMSE2 = RMSEPlot(errPosPlotsX2,errPosPlotsY2)
 rmsePlotVel2,xVelRMSE2,yVelRMSE2,velRMSE2 = RMSEPlot(errVelPlotsX2,errVelPlotsY2)
+rmsePlotAcc2,xAccRMSE2,yAccRMSE2,accRMSE2 = RMSEPlot(errAccPlotsX2,errAccPlotsY2)
 rmsePlotOmega2,omegaRMSE2,_,_ = RMSEPlot(errOmegaPlots2,np.zeros((numRuns,N)))
-"""
-plt.figure()
-plt.plot(xPosTrue,yPosTrue, color='b', label='True Trajectory')
-plt.plot(xPosEst,yPosEst, color='r', label='Estimated Trajectory')
-plt.legend()
-plt.title("Estimated vs. True Trajectory")
-plt.xlabel("X(m)")
-plt.ylabel("Y(m)")
-plt.show()
 
-fig, (ax1, ax2) = plt.subplots(1, 2)
-fig.suptitle('Velocity Estimation')
-ax1.plot(t,xVelTrue, color = 'b', label = "True Velocity")
-ax1.plot(t,xVelEst, color = 'r', label = "Estimated Velocity" )
-ax1.set_title("True vs. Estimated X Velocity")
-ax1.set_xlabel("Time(s)")
-ax1.set_ylabel("Velocity(m/s)")
-ax1.legend()
-
-ax2.plot(t,yVelTrue,color='b',label='True Velocity')
-ax2.plot(t,yVelEst, color = 'r', label = "Estimated Velocity" )
-ax2.set_title("True vs. Estimated X Velocity")
-ax2.set_xlabel("Time(s)")
-ax2.set_ylabel("Velocity(m/s)")
-ax2.legend()
-
-plt.figure()
-plt.plot(t,omegaTrue, color='b', label='True Turn-rate')
-plt.plot(t,omegaEst, color='r', label='Estimated Turn-rate')
-plt.legend()
-plt.title("Estimated vs. True Turn-rate")
-plt.xlabel("Time(s)")
-plt.ylabel("Turn-Rate(rad/s)")
-plt.show()
-"""
 plt.figure()
 plt.plot(t[t1_startSample:t1_endSample+1],rmsePlotPos1)
 plt.title("Position RMSE Over-time for Target 1")
@@ -707,6 +598,13 @@ plt.plot(t[t1_startSample:t1_endSample+1],rmsePlotVel1)
 plt.title("Velocity RMSE Over-time for Target 1")
 plt.xlabel("Time(s)")
 plt.ylabel("RMSE(m/s)")
+plt.show()
+
+plt.figure()
+plt.plot(t[t1_startSample:t1_endSample+1],rmsePlotAcc1)
+plt.title("Acceleration RMSE Over-time for Target 1")
+plt.xlabel("Time(s)")
+plt.ylabel("RMSE(m/s^2)")
 plt.show()
 
 plt.figure()
@@ -731,19 +629,18 @@ plt.ylabel("RMSE(m/s)")
 plt.show()
 
 plt.figure()
+plt.plot(t[t2_startSample:t2_endSample+1],rmsePlotAcc2)
+plt.title("Acceleration RMSE Over-time for Target 2")
+plt.xlabel("Time(s)")
+plt.ylabel("RMSE(m/s^2)")
+plt.show()
+
+plt.figure()
 plt.plot(t[t2_startSample:t2_endSample+1],rmsePlotOmega2)
 plt.title("Turn-rate RMSE Over-time for Target 2")
 plt.xlabel("Time(s)")
 plt.ylabel("RMSE(rad/s)")
 plt.show()
-"""
-print("The number of error cases are:" + str(numErrCases))
-print("xPosRMSE="+str(xPosRMSE))
-print("yPosRMSE="+ str(yPosRMSE))
-print("xVelRMSE="+str(xVelRMSE))
-print("yVelRMSE="+str(yVelRMSE))
-print("omegaRMSE="+str(omegaRMSE))
-"""
 
 numTracks = lastTrackIdx + 1
 for i in range(numTracks):
@@ -767,6 +664,8 @@ for i in range(numTracks): #for each track
         yPosEst = xEsts[1,:]
         plt.plot(xPosEst[startSample:endSample],yPosEst[startSample:endSample]) #plot estimated trajectory
         plt.show()
+        
+        print(numSamples)
 
 print(datetime.now() - startTime)
 print("The number of error cases for Target 1 are:" + str(numErrCasesT1))
@@ -789,4 +688,6 @@ if filterType == "IPDASVSF":
     xVelBLs = BLs_T1[2,:]
     yVelBLs = BLs_T1[3,:]
     omegaBLs= BLs_T1[4,:]
+    
+
     

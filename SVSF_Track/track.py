@@ -11,7 +11,7 @@ from scipy import linalg
 
 
 class track:
-    def __init__(self,z0,G,H,Q,R,maxVel,omegaMax,pInit,startSample,Ts, modelType, sensor, N):
+    def __init__(self,z0,G,H,Q,R,maxVel, maxAcc,omegaMax,pInit,startSample,Ts, modelType, sensor,isMM, N):
         #initializes track using 1-point initialization
         
         #Inputs: 
@@ -33,13 +33,13 @@ class track:
             
         
         #apply 1-point initialization
-        xPost0 = np.array([z0[0],z0[1],0,0,0]) #initial state
+        xPost0 = np.array([z0[0],z0[1],0,0,0,0,0]) #initial state
         
         sigma_x = math.sqrt(R[0,0])
         sigma_y = math.sqrt(R[1,1])
         
         
-        P_Post0 = np.diag(np.array([sigma_x**2,sigma_y**2,(maxVel/2)**2,(maxVel/2)**2,(omegaMax/2)**2])) #initial co-variance
+        P_Post0 = np.diag(np.array([sigma_x**2,sigma_y**2,(maxVel/2)**2,(maxVel/2)**2,(maxAcc/2)**2,(maxAcc/2)**2,(omegaMax/2)**2])) #initial co-variance
         
         #properties of track
         self.xPost = xPost0
@@ -47,6 +47,7 @@ class track:
         self.status = 1
         self.startSample = startSample
         self.sensor = sensor
+        self.isMM = isMM
         self.Ts =  Ts
         self.modelType = modelType
         self.Q = Q
@@ -54,7 +55,7 @@ class track:
         self.H = H
         self.G = G
         self.pCurrent = pInit
-        self.endSample =None
+        
         n = xPost0.shape[0] #dimension of state vector
         xEsts = np.zeros((n,N)) #array of state estimates initialized 
         
@@ -66,9 +67,7 @@ class track:
         self.ePost = ePost0 #set ePost as a property
         self.xEsts = xEsts #estimated states is also a property
         self.BLs = BLs
-        
-    def KF(self,z_k,sensorPos): 
-        #uses the KF to update the state of a track
+                #uses the KF to update the state of a track
         
         #Inputs:
             #z_k = measurement at time step k
@@ -78,69 +77,6 @@ class track:
             #xPostNew = updated state estimate
             #P_PostNew = updated co-variance
         
-        xPost = self.xPost #latest state estimate 
-        P_Post = self.P_Post #latest co-variance
-        modelType = self.modelType #filter model
-        sensor = self.sensor #sensor type
-        Ts = self.Ts #sampling time
-        Q = self.Q #process noise covariance
-        R = self.R #measurement noise covariance
-        G = self.G #input gain matrix
-        H = self.H #measurement matrix
-        
-        n = xPost.shape[0] #number of states
-        
-        #Predict step
-        if modelType=="CV":
-            xPred,F_k = CVModel(xPost,np.diag(np.array([0,0,0])),Ts) #predict state using CV model
-        elif modelType=="CT":
-            xPred,F_k,LinF = CTModel(xPost, np.diag(np.array([0,0,0])), Ts) #predict state using CT model
-            F_k = LinF
-        
-        #predict co-variance
-        if Q.shape[0]>3:
-            P_Pred = F_k@P_Post@F_k.T + Q
-        else:
-            P_Pred = F_k@P_Post@F_k.T + G@Q@G.T
-        
-        P_Pred = 0.5*(P_Pred + P_Pred.T) #for numerical stability
-        
-        #correct step
-        if sensor=="Radar":
-            #predict measurement using non-linear measurement model for radar
-            rangePred = getRange(xPred,sensorPos) 
-            anglePred = getAngle(xPred,sensorPos)
-            
-            m=2
-            zPred = np.zeros((m,))
-            zPred[0] = rangePred #store into a vector
-            zPred[1] = anglePred
-            
-            H = obtain_Jacobian_H(xPred, sensorPos) #obtain Jacobian matrix
-            
-        else:
-            zPred = H@xPred #predicted measurement using LIDAR
-        
-        nu = z_k - zPred #innovation vector
-        S = H@P_Pred@H.T + R #innovation co-variance
-        K = P_Pred@H.T@np.linalg.inv(S) #KF gain
-        
-        xPostNew = xPred + K@nu #updated state
-        P_PostNew = (np.eye(n) - K@H)@P_Pred #updated covariance
-        P_PostNew = .5*(P_PostNew + P_PostNew.T) #for numerical stability
-        
-        ''' Ignore
-        #K_partial = P_Pred@H.T
-        
-        #xPostNew = xPred + K_partial @np.linalg.solve(S,nu)
-        #P_PostNew = (np.eye(n) - K_partial @np.linalg.solve(S,H))@P_Pred
-        '''
-        
-        #store updated state and co-variance into the object
-        self.xPost = xPostNew
-        self.P_Post = P_PostNew
-        return xPostNew,P_PostNew
-
         
     def PDAKF(self,measSet,lambdaVal,PG,PD,sensorPos):
         #Performs data association and filtering
@@ -171,6 +107,8 @@ class track:
         #Predict step
         if modelType=="CV":
             xPred,F_k = CVModel(xPost,np.diag(np.array([0,0,0])),Ts) #predict using the CV model
+        elif modelType=="CA":
+            xPred,F_k = CAModel(xPost, np.diag(np.array([0,0,0])), Ts)
         elif modelType=="CT":
             xPred,F_k,LinF = CTModel(xPost, np.diag(np.array([0,0,0])), Ts) #predict using the CT model
             F_k = LinF
@@ -266,10 +204,17 @@ class track:
         #         P_PostNew = updated co-variance
         #         pCurrent = updated probability of track existence
         
+        isMM = self.isMM
         
-        xPost = self.xPost #latest state estimate
-        P_Post = self.P_Post #latest co-variance
-        pCurrent = self.pCurrent #latest track existence probability
+        if isMM==True: #obtain info from IMM initialization
+            xPost = self.xPostNew #latest state estimate
+            P_Post = self.P_PostNew #latest co-variance
+            pCurrent = self.pCurrentNew #latest track existence probability
+        else:
+             xPost = self.xPost #latest state estimate
+             P_Post = self.P_Post #latest co-variance
+             pCurrent = self.pCurrent #latest track existence probability   
+        
         modelType = self.modelType #filter model
         sensor = self.sensor #type of sensor
         Ts = self.Ts #sampling time
@@ -287,6 +232,8 @@ class track:
         #Predict step
         if modelType=="CV":
             xPred,F_k = CVModel(xPost,np.diag(np.array([0,0,0])),Ts) #predict using CV model
+        elif modelType=="CA":
+            xPred,F_k = CAModel(xPost, np.diag(np.array([0,0,0])), Ts) #predict using CA model
         elif modelType=="CT":
             xPred,F_k,LinF = CTModel(xPost, np.diag(np.array([0,0,0])), Ts) #predict using CT model
             F_k = LinF
@@ -302,7 +249,6 @@ class track:
         pVec = np.array([pCurrent,1-pCurrent]) 
         pPredVec = MP.T@pVec#predict track existence probability
         pPred = pPredVec[0] #probability of track existence, other element in pPred is the probability of no track existence
-        
         
         if sensor=="Radar": 
             rangePred = getRange(xPred,sensorPos) #predict measurement using non-linear model
@@ -362,7 +308,7 @@ class track:
         Beta0 = (1-PD*PG)/(1-delta_k) #probability of no measurement belonging to a target
         BetaVals = np.zeros((m_k,)) #association probabilities for measurements
         #compute association probabilities
-        for k in range(m_k):
+        for i in range(m_k):
             prob_z_i = prob_z_i_Vals[i] #probability of z_i from earlier
             Beta_i = (PD*PG*(V_k/mHat)*prob_z_i)/(1-delta_k) #association probability of z_i belonging to the target
             BetaVals[i] = Beta_i
@@ -501,7 +447,7 @@ class track:
         Beta0 = (1-PD*PG)/(1-delta_k) #probability of no measurement belonging to a target
         BetaVals = np.zeros((m_k,)) #association probabilities for measurements
         #compute association probabilities
-        for k in range(m_k):
+        for i in range(m_k):
             prob_z_i = prob_z_i_Vals[i] #probability of z_i from earlier
             Beta_i = (PD*PG*(V_k/mHat)*prob_z_i)/(1-delta_k) #association probability of z_i belonging to the target
             BetaVals[i] = Beta_i
@@ -542,20 +488,14 @@ class track:
             psiY_opt = linalg.pinv(linalg.pinv(EyBar)@P_Pred_21@H_1.T@S_inv @linalg.pinv(M)) #optimal smoothing boundary layer widths for unmeasured states
         
             if modelType=="CV":
-                print(psiZ_opt)
                 if psiZ_opt[0,0] < psiZ[0] and psiZ_opt[1,1] < psiZ[1]:
-                    print('using kf measured')
                     Ku = P_Pred_11@H_1.T@S_inv#KF upper gain
-
                 else:
-                    print('using svsf measured')
                     Ku = linalg.inv(H_1)@ np.diag(E_z*sat(ePred,psiZ)) @ linalg.pinv(np.diag(ePred)) #CMSVSF upper gain
             
                 if psiY_opt[0,0] <psiY[0] and psiY_opt[1,1] < psiY[1]:
-                    print('using kf not measured')
                     Kl = P_Pred_21@H_1.T@S_inv #KF lower gain
                 else:
-                    print('using svsf not measured')
                     Kl = np.diag(E_y * sat(M @ePred,psiY)) @ linalg.pinv(np.diag(M@ePred)) @ M #CMSVSF lower gain
             elif modelType=="CT":
                 if psiZ_opt[0,0] < psiZ[0] and psiZ_opt[1,1] < psiZ[1]:
@@ -595,7 +535,6 @@ class track:
         
         BL_Vec = np.array([xPosBL,yPosBL,xVelBL,yVelBL,omegaBL])
         
-       
         P_Tilda = K@(middleTerm - np.outer(ePred,ePred))@K.T #co-variance due to measurement origin uncertainty
         P_PostNew = Beta0*P_Pred + (1-Beta0)*P_c + P_Tilda #updated state co-variance
         P_PostNew = 0.5*(P_PostNew + P_PostNew.T) #for numerical stability
@@ -625,7 +564,7 @@ class track:
         #outputs: xPostNew = updated state
         #         P_PostNew = updated co-variance
         #         pCurrent = updated probability of track existence
-
+        
         xPost = self.xPost #latest state estimate
         P_Post = self.P_Post #latest co-variance
         ePost = self.ePost #latest a-posteriori measurement error
@@ -719,7 +658,7 @@ class track:
         Beta0 = (1-PD*PG)/(1-delta_k) #probability of no measurement belonging to a target
         BetaVals = np.zeros((m_k,)) #association probabilities for measurements
         #compute association probabilities
-        for k in range(m_k):
+        for i in range(m_k):
             prob_z_i = prob_z_i_Vals[i] #probability of z_i from earlier
             Beta_i = (PD*PG*(V_k/mHat)*prob_z_i)/(1-delta_k) #association probability of z_i belonging to the target
             BetaVals[i] = Beta_i
@@ -737,7 +676,8 @@ class track:
         Psi_k = T_mat@F_k @linalg.inv(T_mat) #perform transformation
         
         ePred = nu_k #a-priori measurement error set to combined innovation
-        ePred[ePred == 0] = 1E-1000
+        ePred[ePred==0]=1E-1000
+        
         #extract sub-matrices
         Psi_12 = Psi_k[0:m,m:n]
         Psi_22 = Psi_k[m:n,m:n]
@@ -780,100 +720,23 @@ class track:
         
         self.BLs = BLs
         
-    def IMM(xPostsList,P_PostsList,uVec,modelList,filterList,G_List,Q_List,H,R,Ts,z_k,MP, maxVals,useRadar, sensorPos):
-        r = len(modelList) #number of models
-        
-        velMax = maxVals[0]
-        omegaMax = maxVals[1]
-        
-        n = xPostsList[0].shape[0] #number of states
-        
-        #Step 1) Computation of Mixing Probabilities
-        cVec = (uVec.T@MP).T #normalization constants
-        uMatMix = np.zeros((r,r))
-        for i in range(r):
-            for j in range(r):
-                uMatMix[i,j]=(1/cVec[j])*MP[i,j]*uVec[i]      
-                
-        #Step 2) Mixing
-        init_xPostsList = [0]*r
-        init_P_PostsList = [0]*r
-        for j in range(r):
-            weightSum = np.zeros((n,))
-            for i in range(r):
-                x_i = xPostsList[i]
-                weightSum = weightSum + x_i*uMatMix[i,j]
-            init_xPostsList[j] = weightSum
-        
-        
-        for j in range(r):
-            weightSumMat = np.zeros((n,n))
-            x0_j = init_xPostsList[j]
-            for i in range(r):
-                P_i = P_PostsList[i]
-                x_i = xPostsList[i]
-                
-                if modelList[j]== "CT" and modelList[i] == "CV":
-                    weightSumMat[4,4] = (omegaMax/25)**2
-                    
-                weightSumMat = weightSumMat + uMatMix[i,j]*(P_i + np.outer(x_i-x0_j, x_i-x0_j) )
-                
-            P0_j = weightSumMat
-            init_P_PostsList[j] = P0_j
-        
-        #Step 3) Mode-Matched Filtering
-        L = np.zeros((r,))
-        xPostsUpdated = [0]*r
-        P_PostsUpdated = [0]*r
-        
-        for i in range(r):
-            x0 = init_xPostsList[i]
-            P0 = init_P_PostsList[i]
-            G = G_List[i]
-            Q = Q_List[i]
-            modelType = modelList[i]
-            filterType = filterList[i]
-            
-            if filterType == "KF":
-                xPost, P_Post,zPred,S = KF(x0,P0,G,H,Q,R,Ts,z_k,modelType,useRadar,sensorPos)
-                
-            xPostsUpdated[i] = xPost
-            P_PostsUpdated[i] = P_Post
-            
-            nu_i = z_k - zPred
-            abs_det = abs(np.linalg.det(2*math.pi*S))
-            T = 1/(math.sqrt(abs_det))
-            S_inv = np.linalg.inv(S)
-            L_i = T*math.exp(-.5*nu_i.T@S_inv@nu_i)
-            L[i] = L_i
-            
-        
-        #Step 4) Mode probability update
-        c = np.dot(L,cVec)
-        uVec = (1/c)*L*cVec
-        
-        #Step 5) Weighted state estimate and co-variance for output
-        xEst = np.zeros((n,))
-        P_Est = np.zeros((n,n))
-        
-        for i in range(r):
-            xPostNew_i = xPostsUpdated[i]
-            u_i = uVec[i]
-            xEst = xEst + u_i*xPostNew_i
-            
-        for i in range(r):
-            xPostNew_i = xPostsUpdated[i]
-            P_PostNew_i = P_PostsUpdated[i]
-            u_i = uVec[i]
-            P_Est = P_Est + u_i*(P_PostNew_i+ np.outer(xPostNew_i - xEst,xPostNew_i - xEst))
-
-        
-        return xEst, P_Est, xPostsUpdated,P_PostsUpdated,uVec
+       
     
-    
-def CVModel(xVec,Q,Ts): #works the same way as CVModel() in the MTT_Functions.py file
-    F_k = np.array([[1,0,Ts,0,0],[0,1,0,Ts,0],[0,0,1,0,0],[0,0,0,1,0],[0,0,0,0,0]])
-    G_k = np.array([[(Ts**2)/2, 0,0],[0, (Ts**2)/2,0],[Ts,0,0],[0,Ts,0],[0,0,0]])
+def CVModel(xVec,Q,Ts):
+    F_k = np.array([[1,0,Ts,0,0,0,0],
+                    [0,1,0,Ts,0,0,0],
+                    [0,0,1,0,0,0,0],
+                    [0,0,0,1,0,0,0],
+                    [0,0,0,0,0,0,0],
+                    [0,0,0,0,0,0,0],
+                    [0,0,0,0,0,0,0]])
+    G_k = np.array([[(Ts**2)/2, 0,0],
+                    [0, (Ts**2)/2,0],
+                    [Ts,0,0],
+                    [0,Ts,0],
+                    [0,0,0],
+                    [0,0,0],
+                    [0,0,0]])
     
     if Q.shape[0] > 3:
         mean = np.array([0,0,0,0,0])
@@ -886,64 +749,74 @@ def CVModel(xVec,Q,Ts): #works the same way as CVModel() in the MTT_Functions.py
     
     return xNew, F_k
 
-def CTModel(xVec,Q,Ts): #functions the same way as CTModel() in the MTT_Functions.py file
+def CTModel(xVec,Q,Ts):
     n = int(xVec.shape[0])
     vx_k = xVec[2]
     vy_k = xVec[3]
-    omega_k = xVec[4]
+    omega_k = xVec[6]
     
-    G_k = np.array([[(Ts**2)/2, 0,0],[0, (Ts**2)/2,0],[Ts,0,0],[0,Ts,0],[0,0,Ts]])
+    G_k = np.array([[(Ts**2)/2, 0,0],
+                    [0, (Ts**2)/2,0],
+                    [Ts,0,0],
+                    [0,Ts,0],
+                    [0,0,0],
+                    [0,0,0],
+                    [0,0,Ts]])
 
     LinF = np.zeros((n,n))
     
     if omega_k != 0:
-        F_k = np.array([[1,0,math.sin(omega_k*Ts)/omega_k,(math.cos(omega_k*Ts)-1)/omega_k,0],
-                       [0,1,(1-math.cos(omega_k*Ts))/omega_k,math.sin(omega_k*Ts)/omega_k,0],
-                       [0,0, math.cos(omega_k*Ts), -math.sin(omega_k*Ts),0],
-                       [0,0, math.sin(omega_k*Ts), math.cos(omega_k*Ts),0],
-                       [0,0,0,0,1]])
+        F_k = np.array([[1,0,math.sin(omega_k*Ts)/omega_k,(math.cos(omega_k*Ts)-1)/omega_k,0,0,0],
+                       [0,1,(1-math.cos(omega_k*Ts))/omega_k,math.sin(omega_k*Ts)/omega_k,0,0,0],
+                       [0,0, math.cos(omega_k*Ts), -math.sin(omega_k*Ts),0,0,0],
+                       [0,0, math.sin(omega_k*Ts), math.cos(omega_k*Ts),0,0,0],
+                       [0,0,0,0,0,0,0],
+                       [0,0,0,0,0,0,0],
+                       [0,0,0,0,0,0,1]])
         
         LinF[0,0] = 1
         LinF[0,2] = math.sin(Ts*omega_k)/omega_k
         LinF[0,3] = (math.cos(Ts*omega_k)-1)/omega_k
-        LinF[0,4] = (Ts*vx_k*math.cos(Ts*omega_k))/omega_k - (vy_k*(math.cos(Ts*omega_k) - 1))/omega_k**2 - (vx_k*math.sin(Ts*omega_k))/omega_k**2 - (Ts*vy_k*math.sin(Ts*omega_k))/omega_k;
+        LinF[0,6] = (Ts*vx_k*math.cos(Ts*omega_k))/omega_k - (vy_k*(math.cos(Ts*omega_k) - 1))/omega_k**2 - (vx_k*math.sin(Ts*omega_k))/omega_k**2 - (Ts*vy_k*math.sin(Ts*omega_k))/omega_k;
         
         LinF[1,1] = 1
         LinF[1,2] =  -(math.cos(Ts*omega_k) - 1)/omega_k
         LinF[1,3] = math.sin(Ts*omega_k)/omega_k
-        LinF[1,4]  =  (vx_k*(math.cos(Ts*omega_k) - 1))/omega_k**2 - (vy_k*math.sin(Ts*omega_k))/omega_k**2 + (Ts*vy_k*math.cos(Ts*omega_k))/omega_k + (Ts*vx_k*math.sin(Ts*omega_k))/omega_k;
+        LinF[1,6]  =  (vx_k*(math.cos(Ts*omega_k) - 1))/omega_k**2 - (vy_k*math.sin(Ts*omega_k))/omega_k**2 + (Ts*vy_k*math.cos(Ts*omega_k))/omega_k + (Ts*vx_k*math.sin(Ts*omega_k))/omega_k;
         
         LinF[2,2] = math.cos(Ts*omega_k)
         LinF[2,3] = -math.sin(Ts*omega_k)
-        LinF[2,4] = - Ts*vy_k*math.cos(Ts*omega_k) - Ts*vx_k*math.sin(Ts*omega_k);
+        LinF[2,6] = - Ts*vy_k*math.cos(Ts*omega_k) - Ts*vx_k*math.sin(Ts*omega_k);
         
         LinF[3,2] = math.sin(Ts*omega_k)
         LinF[3,3] = math.cos(Ts*omega_k)
-        LinF[3,4] = Ts*vx_k*math.cos(Ts*omega_k) - Ts*vy_k*math.sin(Ts*omega_k);
+        LinF[3,6] = Ts*vx_k*math.cos(Ts*omega_k) - Ts*vy_k*math.sin(Ts*omega_k);
        
-        LinF[4,4] = 1
+        LinF[6,6] = 1
     else:
-        F_k = np.array([[1,0,Ts,0,0],
-                        [0,1,0,Ts,0],
-                        [0,0,1,0,0],
-                        [0,0,0,1,0],
-                        [0,0,0,0,1]])
+        F_k = np.array([[1,0,Ts,0,0,0,0],
+                        [0,1,0,Ts,0,0,0],
+                        [0,0,1,0,0,0,0],
+                        [0,0,0,1,0,0,0],
+                        [0,0,0,0,0,0,0],
+                        [0,0,0,0,0,0,0],
+                        [0,0,0,0,0,0,1]])
         n = F_k.shape[0]
         LinF[0,0]=1
         LinF[0,2]=Ts
-        LinF[0,4]=-(Ts**2*vy_k)/2
+        LinF[0,6]=-(Ts**2*vy_k)/2
         
         LinF[1,1]=1
         LinF[1,3]=Ts
-        LinF[1,4]=(Ts**2*vx_k)/2;
+        LinF[1,6]=(Ts**2*vx_k)/2;
         
         LinF[2,2]=1
-        LinF[2,4]=-Ts*vy_k
+        LinF[2,6]=-Ts*vy_k
         
         LinF[3,3]=1
-        LinF[3,4]=Ts*vx_k
+        LinF[3,6]=Ts*vx_k
         
-        LinF[4,4]=1
+        LinF[6,6]=1
         
     if Q.shape[0] > 3:
         mean = np.array([0,0,0,0,0])
@@ -955,6 +828,38 @@ def CTModel(xVec,Q,Ts): #functions the same way as CTModel() in the MTT_Function
          xNew = F_k@xVec + G_k@v
         
     return xNew, F_k, LinF
+
+
+def CAModel(xVec,Q,Ts):
+    F_k = np.array([[1,0,Ts,0,(1/2)*(Ts**2),0,0],
+                    [0,1,0,Ts,0,(1/2)*(Ts**2),0],
+                    [0,0,1,0,Ts,0,0],
+                    [0,0,0,1,0,Ts,0],
+                    [0,0,0,0,1,0,0],
+                    [0,0,0,0,0,1,0],
+                    [0,0,0,0,0,0,0]])
+    
+    G_k = np.array([[(Ts**2)/2, 0,0],
+                    [0, (Ts**2)/2,0],
+                    [Ts,0,0],
+                    [0,Ts,0],
+                    [1,0,0],
+                    [0,1,0],
+                    [0,0,0]])
+    
+    if Q.shape[0] > 3:
+        mean = np.array([0,0,0,0,0])
+        v = np.random.multivariate_normal(mean,Q) 
+        xNew = F_k@xVec + v
+    else:
+         mean = np.array([0,0,0])
+         v = np.random.multivariate_normal(mean,Q)   
+         xNew = F_k@xVec + G_k@v    
+    
+    return xNew, F_k
+        
+   
+
 
 def getRange(xVec,sensorPos): #obtains the range using the radar measurment model
     #Inputs: xVec = state vector
