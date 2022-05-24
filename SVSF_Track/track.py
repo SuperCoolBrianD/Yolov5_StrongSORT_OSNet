@@ -55,7 +55,7 @@ class track:
         self.H = H
         self.G = G
         self.pCurrent = pInit
-        self.endSample = None
+        
         n = xPost0.shape[0] #dimension of state vector
         xEsts = np.zeros((n,N)) #array of state estimates initialized 
         
@@ -374,6 +374,8 @@ class track:
         #Predict step
         if modelType=="CV":
             xPred,F_k = CVModel(xPost,np.diag(np.array([0,0,0])),Ts) #predict using CV model
+        elif modelType == "CA":
+            xPred,F_k = CAModel(xPost,np.diag(np.array([0,0,0])),Ts) #predict using CV model
         elif modelType=="CT":
             xPred,F_k,LinF = CTModel(xPost, np.diag(np.array([0,0,0])), Ts) #predict using CT model
             F_k = LinF
@@ -487,23 +489,24 @@ class track:
             M = Psi_22 @ pinv_psi_12
             psiY_opt = linalg.pinv(linalg.pinv(EyBar)@P_Pred_21@H_1.T@S_inv @linalg.pinv(M)) #optimal smoothing boundary layer widths for unmeasured states
         
+            if psiZ_opt[0,0] < psiZ[0] and psiZ_opt[1,1] < psiZ[1]:
+                Ku = P_Pred_11@H_1.T@S_inv#KF upper gain
+            else:
+                Ku = linalg.inv(H_1)@ np.diag(E_z*sat(ePred,psiZ)) @ linalg.pinv(np.diag(ePred)) #CMSVSF upper gain
+        
+        
             if modelType=="CV":
-                if psiZ_opt[0,0] < psiZ[0] and psiZ_opt[1,1] < psiZ[1]:
-                    Ku = P_Pred_11@H_1.T@S_inv#KF upper gain
-                else:
-                    Ku = linalg.inv(H_1)@ np.diag(E_z*sat(ePred,psiZ)) @ linalg.pinv(np.diag(ePred)) #CMSVSF upper gain
-            
                 if psiY_opt[0,0] <psiY[0] and psiY_opt[1,1] < psiY[1]:
                     Kl = P_Pred_21@H_1.T@S_inv #KF lower gain
                 else:
                     Kl = np.diag(E_y * sat(M @ePred,psiY)) @ linalg.pinv(np.diag(M@ePred)) @ M #CMSVSF lower gain
             elif modelType=="CT":
-                if psiZ_opt[0,0] < psiZ[0] and psiZ_opt[1,1] < psiZ[1]:
-                    Ku = P_Pred_11@H_1.T@S_inv #KF upper gain
-                else:
-                    Ku = linalg.inv(H_1)@ np.diag(E_z*sat(ePred,psiZ)) @ linalg.pinv(np.diag(ePred)) #CMSVSF upper gain
-                    
                 if psiY_opt[0,0] <psiY[0] and psiY_opt[1,1] < psiY[1] and psiY_opt[2,2] < psiY[2]:
+                    Kl = P_Pred_21@H_1.T@S_inv #KF lower gain
+                else:
+                    Kl = np.diag(E_y * sat(M @ePred,psiY)) @ linalg.pinv(np.diag(M@ePred)) @ M #CMSVSF lower gain
+            elif modelType == "CA":
+                if psiY_opt[0,0] <psiY[0] and psiY_opt[1,1] < psiY[1] and psiY_opt[2,2] < psiY[2] and psiY_opt[3,3] < psiY[3]:
                     Kl = P_Pred_21@H_1.T@S_inv #KF lower gain
                 else:
                     Kl = np.diag(E_y * sat(M @ePred,psiY)) @ linalg.pinv(np.diag(M@ePred)) @ M #CMSVSF lower gain
@@ -531,9 +534,11 @@ class track:
         yPosBL = psiZ_opt[1,1]
         xVelBL = psiY_opt[0,0]
         yVelBL = psiY_opt[1,1]
-        omegaBL = psiY_opt[2,2]
+        xAccBL = psiY_opt[2,2]
+        yAccBL = psiY_opt[3,3]
+        omegaBL = psiY_opt[4,4]
         
-        BL_Vec = np.array([xPosBL,yPosBL,xVelBL,yVelBL,omegaBL])
+        BL_Vec = np.array([xPosBL,yPosBL,xVelBL,yVelBL,xAccBL,yAccBL,omegaBL])
         
         P_Tilda = K@(middleTerm - np.outer(ePred,ePred))@K.T #co-variance due to measurement origin uncertainty
         P_PostNew = Beta0*P_Pred + (1-Beta0)*P_c + P_Tilda #updated state co-variance
@@ -586,6 +591,8 @@ class track:
         #Predict step
         if modelType=="CV":
             xPred,F_k = CVModel(xPost,np.diag(np.array([0,0,0])),Ts) #predict using CV model
+        elif modelType == "CA":
+            xPred,F_k = CAModel(xPost,np.diag(np.array([0,0,0])),Ts) #predict using CV model
         elif modelType=="CT":
             xPred,F_k,LinF = CTModel(xPost, np.diag(np.array([0,0,0])), Ts) #predict using CT model
             F_k = LinF
