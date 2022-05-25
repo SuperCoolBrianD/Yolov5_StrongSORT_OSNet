@@ -46,6 +46,7 @@ class track:
         self.P_Post = P_Post0
         self.status = 1
         self.startSample = startSample
+        self.endSample = None
         self.sensor = sensor
         self.isMM = isMM
         self.Ts =  Ts

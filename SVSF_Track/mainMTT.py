@@ -18,7 +18,7 @@ plt.close('all')
 from datetime import datetime
 startTime = datetime.now()
 
-filterType="IPDAKF" #tracking algorithm
+filterType="IPDAGVBLSVSF" #tracking algorithm
 useSVSF_G = False #use S.A. Gadsden's SVSF
 modelType = "CA" #model for tracker, only single model trackers in this program
 useNewTraj = 1 # 1 means to generate a new synthetic trajectory, 0 means to use a existing one from a file
@@ -40,7 +40,7 @@ maxVel = 27 #for initializing velocity variance for 1-point initialization
 maxAcc = 2
 omegaMax = math.radians(4) #for initializing turn-rate variance for 1-point initialization
 maxVals = [maxVel,maxAcc,omegaMax]
-numRuns =100 #number of Monte Carlo Runs
+numRuns =1 #number of Monte Carlo Runs
 N = int(totalTime/Ts) #number of samples in the timulation
 
 t = np.arange(0,totalTime,Ts) #time vector for simulation for plotting
@@ -234,6 +234,7 @@ else:
     psi1 = 5
     psi2 = 50
     psi3 = 100
+    psi4 = 100
     gammaZ = .9*np.eye(m)
     gammaY = .9*np.eye(n-m)
     
@@ -247,7 +248,7 @@ else:
     '''
     
     psiZ = np.array([psi1,psi1])
-    psiY = np.array([psi2,psi2,psi3])
+    psiY = np.array([psi2,psi2,psi3,psi3,psi4])
     
 #generate true trajectories of targets
 if useNewTraj==1:
