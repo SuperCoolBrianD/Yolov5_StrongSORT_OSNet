@@ -328,7 +328,7 @@ for ii in range(numRuns): #for each Monte Carlo run
         unassignedMeas0 = np.hstack((clutterPoints1,targetMeas)) #full set of unassigned measurements
     
     #initial tracks, each unassigned measurement initiates a track
-    trackList,lastTrackIdx = initiateTracksMM(trackList,lastTrackIdx, unassignedMeas0, maxVals, G_List, H, Q_List, R, models,filters, Ts, pInit, 0, sensor, N)
+    trackList,lastTrackIdx = initiateTracksMM(trackList,lastTrackIdx, unassignedMeas0, maxVals, G_List, H, Q_List, R, models, filters, Ts, pInit, 0, sensor, N)
     
     
     for k in range(1,N): #for each sample/frame/scan

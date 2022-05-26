@@ -73,9 +73,7 @@ def cam_radar(rx, ry, rz, tx, ty, tz, c):
     cam_matrix = np.eye(4)
     cam_matrix[:3, :3] = c
     radar_matrix = radar_cam(rx, ry, rz, tx, ty, tz)
-    print(radar_matrix)
     proj_radar2cam = cam_matrix@radar_matrix
-    print(cam_matrix)
     return proj_radar2cam
 
 

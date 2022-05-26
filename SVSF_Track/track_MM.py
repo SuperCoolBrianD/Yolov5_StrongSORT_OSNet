@@ -74,6 +74,7 @@ class track_MM:
         self.R = R #measurement noise co-variance
         self.H = H #measurement matrix
         self.isMM = True#if the tracker applies a multiple model filter
+        self.endSample = None
         #self.pCurrent = pCurrents
         
     def IMMIPDAKF(self,measSet,MP,PD,PG,lambdaVal,maxVals,sensorPos):

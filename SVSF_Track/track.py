@@ -55,7 +55,7 @@ class track:
         self.H = H
         self.G = G
         self.pCurrent = pInit
-        
+        self.endSample =None
         n = xPost0.shape[0] #dimension of state vector
         xEsts = np.zeros((n,N)) #array of state estimates initialized 
         

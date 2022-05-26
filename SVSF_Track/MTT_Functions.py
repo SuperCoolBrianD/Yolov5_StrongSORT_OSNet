@@ -12,7 +12,7 @@ from scipy.linalg import sqrtm
 from scipy.stats.distributions import chi2
 import random
 from track import*
-from track_MM import*
+# from track_MM import*
 
 def CVModel(xVec,Q,Ts):
     F_k = np.array([[1,0,Ts,0,0,0,0],
@@ -46,7 +46,7 @@ def CTModel(xVec,Q,Ts):
     vx_k = xVec[2]
     vy_k = xVec[3]
     omega_k = xVec[6]
-    
+
     G_k = np.array([[(Ts**2)/2, 0,0],
                     [0, (Ts**2)/2,0],
                     [Ts,0,0],
@@ -481,7 +481,7 @@ def initiateTracksMM(trackList,lastTrackIdx,measSet, maxVals,G_List,H,Q_List,R,m
             j=j+1 #index of new track
             z_i = measSet[:,i] #ith measurement 
             
-            trackMM_j = track_MM(z_i,G_List,H,Q_List,R,maxVals,pInit,startSample,Ts,models,filters,sensor,N) #initiate jth track 
+            trackMM_j = track_MM(z_i,G_List,H,Q_List,R,maxVals,pInit,startSample,Ts,models,filters,sensor,N) #initiate jth track
             trackList[j] = trackMM_j #store track at position j in trackList
            
         lastTrackIdx = j #index of last track
