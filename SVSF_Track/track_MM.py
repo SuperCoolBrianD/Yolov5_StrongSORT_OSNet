@@ -74,6 +74,7 @@ class track_MM:
         self.R = R #measurement noise co-variance
         self.H = H #measurement matrix
         self.isMM = True#if the tracker applies a multiple model filter
+        self.endSample = None
         #self.pCurrent = pCurrents
         
     def IMMIPDAKF(self,measSet,MP,PD,PG,lambdaVal,maxVals,sensorPos):
@@ -128,7 +129,7 @@ class track_MM:
                x_i = modeTrackList[i].xPost
                P_i = modeTrackList[i].P_Post
                 
-               if modelList[j]== "CT" and modelList[i] == "CV":
+               if modelList[j]== "CT" and (modelList[i] == "CV" or modelList[i]=="CA"):
                    weightSumMat[6,6] = (omegaMax/5)**2
                elif modelList[j]=="CA" and modelList[i] == "CV":
                    weightSumMat[4,4] = (maxAcc/30)**2
@@ -263,7 +264,7 @@ class track_MM:
                P_i = modeTrackList[i].P_Post
                 
                if modelList[j]== "CT" and (modelList[i] == "CV" or modelList[i]=="CA"):
-                   weightSumMat[6,6] = (omegaMax/2)**2
+                   weightSumMat[6,6] = (omegaMax)**2
                elif modelList[j]=="CA" and modelList[i] == "CV":
                    weightSumMat[4,4] = (maxAcc/25)**2
                    weightSumMat[5,5]= (maxAcc/25)**2
@@ -314,7 +315,7 @@ class track_MM:
             
             abs_det = abs(np.linalg.det(2*pi*S))
             T = 1/(sqrt(abs_det))
-            S_inv = np.linalg.inv(S)
+            S_inv = np.linalg.pinv(S)
             
             for j in range(ng):
                 z_j = gatedMeas[:,j]

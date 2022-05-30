@@ -1,11 +1,14 @@
 import sys
 sys.path.append('yolor')
 sys.path.append('SVSF_Track')
-from yolor.detect_custom import init_yoloR, detect
+# from yolor.detect_custom import init_yoloR, detect
 from SVSF_Track.MTT_Functions import *
 from radar_utils import *
+import sort
 import rosbag
 from matplotlib.animation import FuncAnimation
+
+
 
 # Read recording
 bag = rosbag.Bag("record/traffic3.bag")
@@ -22,7 +25,7 @@ for i in topics[1]:
 radar_d = '/radar_data'
 # init plt figure
 fig, axs = plt.subplots(1, figsize=(6, 6))
-fig.canvas.set_window_title('Radar Detection Single Model')
+fig.canvas.set_window_title('Radar Detection and Tracking IMM')
 # create generator object for recording
 bg = bag.read_messages()
 s = 0
@@ -38,7 +41,7 @@ imgs = []
 radar_time_0 = 0
 camera_time_0 = 0
 update = 1
-cam1 = np.empty((5, 5))
+cam1 = np.empty((5,5))
 tracked_object = dict()
 alive_track = [0] * 8000
 life = 10
@@ -46,94 +49,59 @@ life = 10
 trackList = [0] * 8000  # allocate track list, a list of objects
 lastTrackIdx = -1  # index of a track in the list,
 # init KF tracker
-sigma_v = 1E-1  # process noise standard deviation
-sigma_v_filt = sigma_v  # process noise standard deviation for filter
-sigma_w = .5  # measurement noise standard deviation in position
+sigma_v = 1E-1 #process noise standard deviation
+sigma_v_filt = sigma_v #process noise standard deviation for filter
+sigma_w = .5 #measurement noise standard deviation in position
 R = np.diag(np.array([sigma_w ** 2, sigma_w ** 2]))  # measurement co-variance
 H = np.array([[1, 0, 0, 0, 0, 0, 0], [0, 1, 0, 0, 0, 0, 0]])  # measurement matrix
-pInit = .2  # initial probability of track existence
-PG = .999  # gate probability
-Ts = .12  # sampling time
+pInit = .2 #initial probability of track existence
+PG = .999 #gate probability
+Ts = .12 #sampling time
 unassignedMeas0 = np.array([[]])
-maxVel = 16  # for initializing velocity variance for 1-point initialization
-omegaMax = math.radians(4)  # for initializing turn-rate variance for 1-point initialization
+maxVel = 16 #for initializing velocity variance for 1-point initialization
+omegaMax = math.radians(4) #for initializing turn-rate variance for 1-point initialization
 modelType = 'CV'
 sensor = 'Lidar'
 # filterType = "IPDAGVBLSVSF"
-# filterType = "IMMIPDAKF"
-filterType = "IPDAGVBLSVSF"
+filterType = "IMMIPDAKF"
+# filterType = "IPDAGVBLSVSF"
 # filterType = "IPDASVSF"
 sensorPos = np.array([0, 0])
-P_ii = .95  # for Markov matrix of IPDA
-PD = .6  # probability of target detection in a time step
-MP = np.array([[P_ii, 1 - P_ii], [1 - P_ii, P_ii]])  # Markov matrix for IPDA
-lambdaVal = 0.05  # parameter for clutter density
-delTenThr = .05  # threshold for deleting a tenative track
-confTenThr = .9  # threshold for confirming a tenative track
-delConfThr = 0.05  # threshold for deleting a confirmed track
+P_ii = .95  #for Markov matrix of IPDA
+PD = .6 #probability of target detection in a time step
+
+lambdaVal = 0.05 # parameter for clutter density
+delTenThr = .05 #threshold for deleting a tenative track
+confTenThr = .9 # threshold for confirming a tenative track
+delConfThr = 0.05 # threshold for deleting a confirmed track
 # new for svsf
 
-n = 7  # x, y, vx, vy, ax, ay, turn
+n = 7 # x, y, vx, vy, ax, ay, turn
 m = 2
 T = np.eye(n)
-psi1 = 100  # p larger uncertainty increase
-psi2 = 100  # v larger uncertainty increase
-psi3 = 10  # a larger uncertainty increase
-psi4 = 10  # turn rate larger uncertainty increase
-gammaZ = .1 * np.eye(m)  # convergence rate stability from 0-1 for measured state
-gammaY = .1 * np.eye(n - m)  # for unmeasured state
+psi1 = 100 # p larger uncertainty increase
+psi2 = 100 # v larger uncertainty increase
+psi3 = 10 # a larger uncertainty increase
+psi4 = 10 # turn rate larger uncertainty increase
+gammaZ = .1 * np.eye(m) # convergence rate stability from 0-1 for measured state
+gammaY = .1 * np.eye(n - m) # for unmeasured state
 # new for IMM
 maxAcc = 5
-maxOmega = math.radians(4)
-Q_CV = np.diag([sigma_v ** 2, sigma_v ** 2, 0])  # process noise co-variance for CV model
-Q_CA = np.diag([sigma_v ** 2, sigma_v ** 2, 0])  # process noise co-variance for CA model
-Q_CT = np.diag([sigma_v ** 2, sigma_v ** 2, sigma_v ** 2])  # process noise co-variance for CT model
+Q_CV = np.diag([sigma_v**2,sigma_v**2,0]) #process noise co-variance for CV model
+Q_CA = np.diag([sigma_v**2,sigma_v**2,0]) #process noise co-variance for CA model
+Q_CT = np.diag([sigma_v**2,sigma_v**2, sigma_v**2]) #process noise co-variance for CT model
 
-G_CV = np.array([[(Ts ** 2) / 2, 0, 0], [0, (Ts ** 2) / 2, 0], [Ts, 0, 0], [0, Ts, 0], [0, 0, 0], [0, 0, 0],
-                 [0, 0, 0]])  # input gain for CV
-G_CA = np.array([[(Ts ** 2) / 2, 0, 0], [0, (Ts ** 2) / 2, 0], [Ts, 0, 0], [0, Ts, 0], [1, 0, 0], [0, 1, 0],
-                 [0, 0, 0]])  # input gain for CA
-G_CT = np.array([[(Ts ** 2) / 2, 0, 0], [0, (Ts ** 2) / 2, 0], [Ts, 0, 0], [0, Ts, 0], [0, 0, 0], [0, 0, 0],
-                 [0, 0, Ts]])  # input gain for CT
-
-G_List = [G_CV, G_CA]  # input gain list
-Q_List = [Q_CV, Q_CA]  # process noise co-variance list
+G_CV = np.array([[(Ts**2)/2, 0,0],[0, (Ts**2)/2,0],[Ts,0,0],[0,Ts,0],[0,0,0],[0,0,0],[0,0,0]])  #input gain for CV
+G_CA = np.array([[(Ts**2)/2, 0,0],[0, (Ts**2)/2,0],[Ts,0,0],[0,Ts,0], [1,0,0],[0,1,0],[0,0,0]]) #input gain for CA
+G_CT = np.array([[(Ts**2)/2, 0,0],[0, (Ts**2)/2,0],[Ts,0,0],[0,Ts,0],[0,0,0],[0,0,0],[0,0,Ts]]) #input gain for CT
+models = ["CV", 'CA']
+G_List = [G_CV, G_CA] #input gain list
+Q_List = [Q_CV, Q_CA] #process noise co-variance list
 maxVals = [maxVel, maxAcc, omegaMax]
-pInits = [.2, .2]  # initial track existence probabilities
-uVec0 = [0.5, .5]  # initial mode probabilities
-models = ["CV", "CA"]
+pInits = [.2,.2] #initial track existence probabilities
+uVec0 = [.5, .5] #initial mode probabilities
+MP = np.array([[P_ii, 1-P_ii], [1-P_ii, P_ii]]) #Markov matrix for IPDA
 filters = ['IPDAKF', 'IPDAKF']
-
-if modelType == "CV":
-    Q = np.diag(np.array([sigma_v_filt ** 2, sigma_v_filt ** 2, 0 ** 2]))
-    G = np.array(
-        [[(Ts ** 2) / 2, 0, 0], [0, (Ts ** 2) / 2, 0], [Ts, 0, 0], [0, Ts, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]])
-    ''''
-    Q_CV = L1*np.array([[(Ts**3)/3, 0, (Ts**2)/2, 0, 0],
-                     [0,(Ts**3)/3, 0, (Ts**2)/2, 0 ],
-                     [(Ts**2)/2, 0, Ts, 0, 0],
-                     [0, (Ts**2)/2, 0, Ts, 0],
-                    [0, 0, 0, 0, 0]])
-    #Q=Q_CV
-    '''
-elif modelType == "CA":
-    Q = np.diag(np.array([sigma_v_filt ** 2, sigma_v_filt ** 2, 0 ** 2]))
-    G = np.array(
-        [[(Ts ** 2) / 2, 0, 0], [0, (Ts ** 2) / 2, 0], [Ts, 0, 0], [0, Ts, 0], [1, 0, 0], [0, 1, 0], [0, 0, 0]])
-
-elif modelType == "CT":
-    Q = np.diag(np.array([sigma_v_filt ** 2, sigma_v_filt ** 2, sigma_v_filt ** 2]))
-    G = np.array(
-        [[(Ts ** 2) / 2, 0, 0], [0, (Ts ** 2) / 2, 0], [Ts, 0, 0], [0, Ts, 0], [0, 0, 0], [0, 0, 0], [0, 0, Ts]])
-    '''
-    Q_CT = L1*np.array([[(Ts**3)/3, 0, (Ts**2)/2, 0, 0],
-                     [0,(Ts**3)/3, 0, (Ts**2)/2, 0 ],
-                     [(Ts**2)/2, 0, Ts, 0, 0],
-                     [0, (Ts**2)/2, 0, Ts, 0],
-                    [0, 0, 0, 0, (L2/L1)*Ts]])
-    #Q=Q_CT
-    '''
-
 
 ##Best for CV
 '''
@@ -160,17 +128,18 @@ t_array = []
 dt_array = []
 dt_no_match_array = []
 
+
 mtx = np.array([[1113.5, 0., 974.2446],
-                [0., 1113.5, 586.6797],
+                [0.,1113.5,586.6797],
                 [0., 0., 1.]])
 
 # mtx = np.array([[234.45076996, 0., 334.1804498],
 #                 [0.,311.6748573,241.50825294],
 #                 [0., 0., 1.]])
-dist = np.array([[-0.06624252, -0.00059409, -0.00183169, 0.0030411, 0.00063524]])
+dist = np.array([[-0.06624252, -0.00059409, -0.00183169,  0.0030411,   0.00063524]])
 
-h, w = 480, 640
-newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w, h), 1, (w, h))
+h,  w = 480, 640
+newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w,h), 1, (w,h))
 
 
 def animate(g):
@@ -242,7 +211,7 @@ def animate(g):
         # print(dt)
         plt.cla()
         # record time (Radar time)
-        tm = i.message.time_stamp[0] / 10 ** 6
+        tm = i.message.time_stamp[0]/10**6
         axs.set_xlim(-50, 80)
         axs.set_ylim(0, 100)
         # convert SRS message to Numpy
@@ -272,14 +241,14 @@ def animate(g):
             # perform tracking
             trackList, unassignedMeas = gating(trackList, lastTrackIdx, PG, MP, maxVals, sensorPos, measSet)
             # perform gating
-            trackList = updateStateTracks(trackList, lastTrackIdx, filterType, measSet, maxVals,
-                                          lambdaVal, MP, PG, PD, sensorPos, T, gammaZ, gammaY, psiZ, psiY, k)
+            trackList = updateStateTracks(trackList,lastTrackIdx, filterType, measSet, maxVals,
+                                          lambdaVal,MP, PG, PD, sensorPos, T, gammaZ, gammaY, psiZ, psiY, k)
             # update the state of each track
-            trackList = updateTracksStatus(trackList, lastTrackIdx, delTenThr, delConfThr, confTenThr, k)
+            trackList = updateTracksStatus(trackList,lastTrackIdx, delTenThr, delConfThr, confTenThr,k)
             # update the status of each track usiing the track manager
             # initiate tracks for measurements that were not gated or in other words unassigned measurements
-            trackList, lastTrackIdx = initiateTracks(trackList, lastTrackIdx, unassignedMeas,
-                                                     maxVel,maxAcc,maxOmega,G,H,Q,R,modelType,Ts,pInit, k, sensor, N)
+            trackList, lastTrackIdx = initiateTracksMM(trackList,lastTrackIdx, unassignedMeas, maxVals, G_List, H,
+                                                       Q_List, R, models,filters, Ts, pInit, k, sensor, N)
             k += 1
             # iterate through all tracks
             # ToDo change tracklet format so it doesn't need to iterate through all previous tracks
@@ -288,7 +257,7 @@ def animate(g):
                 # get centroid
 
                 centroid = ii.xPost[:2]
-                speed = np.sqrt(ii.xPost[3] ** 2 + ii.xPost[4] ** 2)
+                speed = np.sqrt(ii.xPost[3]**2 + ii.xPost[4]**2)
                 # if track has terminated remove from tracked objects
                 if ii.endSample:
                     tracked_object[jj] = None
@@ -303,7 +272,7 @@ def animate(g):
                     tracked_object[jj].upd(((centroid[0], centroid[1]), tm))
                     axs.text(centroid[0], centroid[1] - 2, 'ID: ' + str(jj), fontsize=11,
                              color='r')
-                    axs.text(centroid[0], centroid[1] - 5, 'ID: ' + f'{speed * 3.6:.2f} km/h', fontsize=11,
+                    axs.text(centroid[0], centroid[1] - 5, 'ID: ' + f'{speed*3.6:.2f} km/h', fontsize=11,
                              color='r')
             # plot and update all alive tracks
             for tk, j in enumerate(alive_track[:lastTrackIdx]):
@@ -326,17 +295,17 @@ def animate(g):
             tz = 0.1
             rx = 1.62
             r2c = cam_radar(rx, ry, rz, tx, ty, tz, mtx)
-            if cls:
-                for cc in cls:
-                    bbox = get_bbox_cls(cc)
-                    # print(bbox)
-                    bbox = get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[5], bbox[3], bbox[4], 0)
-                    bbox = project_to_image(bbox, r2c)
-                    pts = project_to_image(cc.T, r2c)
-                    # print(pts)
-                    box2d = get_bbox_2d(pts.T)
-                    cv2.rectangle(cam1, box2d[0], box2d[1], (255, 255, 0))
-                    draw_projected_box3d(cam1, bbox)
+            # if cls:
+            #     for cc in cls:
+            #         bbox = get_bbox_cls(cc)
+            #         # print(bbox)
+            #         bbox = get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[5], bbox[3], bbox[4], 0)
+            #         bbox = project_to_image(bbox, r2c)
+            #         pts = project_to_image(cc.T, r2c)
+            #         # print(pts)
+            #         box2d = get_bbox_2d(pts.T)
+            #         cv2.rectangle(cam1, box2d[0], box2d[1], (255,255,0))
+            #         draw_projected_box3d(cam1, bbox)
             img, cam_arr = render_radar_on_image(arr, cam1, r2c, 9000, 9000)
             cv2.imshow('Camera', img)
             cv2.waitKey(1)
@@ -352,6 +321,7 @@ def animate(g):
 ani = FuncAnimation(fig, animate, interval=10, frames=2000)
 plt.show()
 
+
 """
 Key issue
 
@@ -365,8 +335,8 @@ Implement IMM for multi target
 
 If there is a object ID that is > the len of the object list
     Append object
-
-
+    
+    
 check all alive track
 if no update -1 to life
 draw all track with life > 0
@@ -374,12 +344,12 @@ Radar output:
     xyz
     radar power
     range_rate (doppler): radial velocity 
-
+    
 DBSCAN Detection output
     Centroid: center of the bounding box
     Bounding box width length height (orientation)
     average range_rate: average of xyz of the clusters
-
+    
 
 
 
@@ -399,8 +369,8 @@ Tracking
                 constant turn
         Output
         cov, state
-
-
+        
+        
 Bell camera
 
 """
