@@ -154,7 +154,7 @@ def convert_to_numpy(pc):
 
 def filter_zero(pc):
     """Filter low velocity points"""
-    mask = np.abs(pc[:, 3]) > 0.05
+    mask = np.abs(pc[:, 3]) > 0.01
     pc = pc[mask, :]
     return pc
 
@@ -185,8 +185,20 @@ def get_bbox_cls(arr):
     y_max = max(y_coord)
     z_min = min(z_coord)
     z_max = max(z_coord)
-    return np.array([x_min+(x_max-x_min)/2, y_min+(y_max-y_min)/2, z_min+(z_max-z_min)/2 ,
+    return np.array([x_min+(x_max-x_min)/2, y_min+(y_max-y_min)/2, z_min+(z_max-z_min)/2,
                       x_max-x_min, y_max-y_min, z_max-z_min, 0])
+
+
+def get_bbox_cls_label(arr):
+    x_coord, y_coord, z_coord = arr[:, 0], arr[:, 1], arr[:, 2]
+    x_min = min(x_coord)
+    x_max = max(x_coord)
+    y_min = min(y_coord)
+    y_max = max(y_coord)
+    z_min = min(z_coord)
+    z_max = max(z_coord)
+    return [x_min+(x_max-x_min)/2, y_min+(y_max-y_min)/2, z_min+(z_max-z_min)/2,
+                      x_max-x_min, y_max-y_min, z_max-z_min, 0, 0, 0]
 
 
 
