@@ -46,6 +46,7 @@ class track:
         self.P_Post = P_Post0
         self.status = 1
         self.startSample = startSample
+        self.endSample = None
         self.sensor = sensor
         self.isMM = isMM
         self.Ts =  Ts
@@ -264,7 +265,8 @@ class track:
             zPred = H@xPred #predict measurement
             
         S = H@P_Pred@H.T + R #innovation co-variance
-        S_inv = np.linalg.inv(S) #innovation co-variance inverse
+        S = .5*(S + S.T)
+        S_inv = np.linalg.pinv(S) #innovation co-variance inverse
         K = P_Pred@H.T@ S_inv #KF gain
         
         cn = math.pi #term used to get the volume of the gated region ellipsoid
@@ -297,7 +299,8 @@ class track:
             prob_z_i_Vals[i]=prob_z_i
           #  probZ_Sum = probZ_Sum+ prob_z_i
         probZ_Sum = sum(prob_z_i_Vals) #sum of probabilities 
-        
+
+        #print(mHat)
         if m_k==0:
             delta_k = PD*PG #if m_k is zero use this formula to get the delta_k term
         else:

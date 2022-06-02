@@ -32,13 +32,16 @@ s = 0
 # adjust image visualization
 cv2.namedWindow("Camera")
 cv2.moveWindow('Camera', 800, 800)
+# init loop
 
 
-mtx = np.array([[1113.5, 0., 974.2446],
-                [0.,1113.5,586.6797],
+mtx = np.array([[234.45076996, 0., 334.1804498],
+                [0.,311.6748573,241.50825294],
                 [0., 0., 1.]])
-# dist = np.array([[-0.06624252, -0.00059409, -0.00183169,  0.0030411,   0.00063524]])
+dist = np.array([[-0.06624252, -0.00059409, -0.00183169,  0.0030411,   0.00063524]])
 
+h,  w = 480, 640
+newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w,h), 1, (w,h))
 img_coord = 0
 nxt = False
 
@@ -104,7 +107,7 @@ for j, i in enumerate(bag.read_messages()):
             if cls:
                 for cc in cls:
                     bbox = get_bbox_cls(cc)
-                    bbox = get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], 0)
+                    bbox = in_camera_coordinate(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], 0)
                     bbox = project_to_image(bbox, r2c)
                     draw_projected_box3d(cam1, bbox)
             if cls:

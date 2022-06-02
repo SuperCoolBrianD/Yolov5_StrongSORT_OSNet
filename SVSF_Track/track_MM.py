@@ -129,7 +129,7 @@ class track_MM:
                x_i = modeTrackList[i].xPost
                P_i = modeTrackList[i].P_Post
                 
-               if modelList[j]== "CT" and modelList[i] == "CV":
+               if modelList[j]== "CT" and (modelList[i] == "CV" or modelList[i]=="CA"):
                    weightSumMat[6,6] = (omegaMax/5)**2
                elif modelList[j]=="CA" and modelList[i] == "CV":
                    weightSumMat[4,4] = (maxAcc/30)**2
@@ -263,8 +263,8 @@ class track_MM:
                x_i = modeTrackList[i].xPost
                P_i = modeTrackList[i].P_Post
                 
-               if modelList[j]== "CT" and modelList[i] == "CV":
-                   weightSumMat[6,6] = (omegaMax/2)**2
+               if modelList[j]== "CT" and (modelList[i] == "CV" or modelList[i]=="CA"):
+                   weightSumMat[6,6] = (omegaMax)**2
                elif modelList[j]=="CA" and modelList[i] == "CV":
                    weightSumMat[4,4] = (maxAcc/25)**2
                    weightSumMat[5,5]= (maxAcc/25)**2
@@ -276,12 +276,14 @@ class track_MM:
             #init_P_PostsList[j] = P0_j
             
         self.modeTrackList = modeTrackList
+        self.cVec = cVec
            
     def IMMIPDA_Filter(self,measSet,MP,PD,PG,lambdaVal,maxVals,sensorPos):
         #Performs the steps required for state estimation, steps 1-3
         xPost = self.xPost
         modeTrackList = self.modeTrackList #list of mode-conditioned tracks
         uVec = self.uVec #mode probabilities
+        cVec = self.cVec #cVec from initialization
         modelList = self.models #models for IMM estimator
         gateArr = self.gateArr #binary array indicating which measurements have been associated to the track
         
@@ -291,7 +293,7 @@ class track_MM:
         gatedMeas = measSet[:,gateArr.astype(bool)] #gated measurements
         
         #Step 3) Mode-Matched Filtering
-        cVec = (uVec.T@MP).T #normalization constants
+        #cVec = (uVec.T@MP).T #normalization constants
                 
         n = xPost.shape[0] #number of states
         r = len(modelList) #number of models
@@ -313,7 +315,7 @@ class track_MM:
             
             abs_det = abs(np.linalg.det(2*pi*S))
             T = 1/(sqrt(abs_det))
-            S_inv = np.linalg.inv(S)
+            S_inv = np.linalg.pinv(S)
             
             for j in range(ng):
                 z_j = gatedMeas[:,j]

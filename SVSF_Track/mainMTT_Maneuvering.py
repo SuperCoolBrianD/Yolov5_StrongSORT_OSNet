@@ -40,7 +40,7 @@ sigma_v_filt = sigma_v #process noise standard deviation for filter
 maxVel = 27 #for initializing velocity variance for 1-point initialization
 maxAcc = 5
 omegaMax = math.radians(4) #for initializing turn-rate variance for 1-point initialization
-numRuns =100
+numRuns =1
 #number of Monte Carlo Runs
 N = int(totalTime/Ts) #number of samples in the timulation
 
@@ -53,13 +53,12 @@ G_CV = np.array([[(Ts**2)/2, 0,0],[0, (Ts**2)/2,0],[Ts,0,0],[0,Ts,0],[0,0,0],[0,
 G_CA = np.array([[(Ts**2)/2, 0,0],[0, (Ts**2)/2,0],[Ts,0,0],[0,Ts,0], [1,0,0],[0,1,0],[0,0,0]]) #input gain for CA
 G_CT = np.array([[(Ts**2)/2, 0,0],[0, (Ts**2)/2,0],[Ts,0,0],[0,Ts,0],[0,0,0],[0,0,0],[0,0,Ts]]) #input gain for CT
 
-G_List = [G_CV,G_CA] #input gain list
-Q_List = [Q_CV,Q_CA] #process noise co-variance list
+G_List = [G_CV,G_CA,G_CT] #input gain list
+Q_List = [Q_CV,Q_CA,Q_CT] #process noise co-variance list
 maxVals = [maxVel,maxAcc,omegaMax]
-pInits = [.2,.2] #initial track existence probabilities 
-uVec0 = [0.5,.5] #initial mode probabilities
-models = ["CV","CA"]
-filters = ['IPDAKF','IPDAKF']
+uVec0 = [1./3,1./3,1./3] #initial mode probabilities
+models = ["CV","CA", "CT"]
+filters = ['IPDAKF','IPDAKF','IPDAKF']
 
 t = np.arange(0,totalTime,Ts) #time vector for simulation for plotting
 
@@ -72,8 +71,18 @@ regionWidth = 100 #width of the clutter region surrounding a target
 regionLength = 100 #length of the clutter region surrounding a target
 pInit = .2 #initial probability of track existence
 
-P_ii = .9999  #for Markov matrix of IPDA
-MP = np.array([[P_ii,1-P_ii],[1-P_ii,P_ii]]) #Markov matrix for IPDA
+P_ii_IPDA = .9999  #for Markov matrix of IPDA
+MP_IPDA = np.array([[P_ii_IPDA,1-P_ii_IPDA],[1-P_ii_IPDA,P_ii_IPDA]]) #Markov matrix for IPDA
+r = len(models)
+
+P_ii_IMM = .999
+P_ij_IMM = (1-P_ii_IMM)/r
+
+if r==2:
+    MP_IMM = np.array([[P_ii_IMM,P_ij_IMM],[P_ij_IMM,P_ii_IMM]]) 
+elif r==3:
+    MP_IMM = np.array([[P_ii_IMM,P_ij_IMM,P_ij_IMM],[P_ij_IMM,P_ii_IMM,P_ij_IMM],[P_ij_IMM,P_ij_IMM,P_ii_IMM]]) 
+
 
 #Parameters for track management
 delTenThr = .05; #threshold for deleting a tenative track
@@ -456,8 +465,8 @@ for ii in range(numRuns): #for each Monte Carlo run
         else: #if no target is detected
             measSet = np.hstack((clutterPoints1,clutterPoints2)) #full set of measurements
      
-        trackList, unassignedMeas = gating(trackList,lastTrackIdx, PG, MP, maxVals,sensorPos,measSet) #perform gating
-        trackList = updateStateTracks(trackList,lastTrackIdx, filterType, measSet, maxVals, lambdaVal,MP, PG, PD, sensorPos,T, gammaZ, gammaY, psiZ, psiY, k) #update the state of each track
+        trackList, unassignedMeas = gating(trackList,lastTrackIdx, PG, MP_IMM, maxVals,sensorPos,measSet) #perform gating
+        trackList = updateStateTracks(trackList,lastTrackIdx, filterType, measSet, maxVals, lambdaVal,MP_IPDA, PG, PD, sensorPos,T, gammaZ, gammaY, psiZ, psiY, k) #update the state of each track
         trackList = updateTracksStatus(trackList,lastTrackIdx, delTenThr, delConfThr, confTenThr,k) #update the status of each track usiing the track manager
         
         
