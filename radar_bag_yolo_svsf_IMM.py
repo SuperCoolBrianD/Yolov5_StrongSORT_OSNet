@@ -1,3 +1,4 @@
+
 import sys
 sys.path.append('yolor')
 sys.path.append('SVSF_Track')
@@ -7,7 +8,6 @@ from radar_utils import *
 import sort
 import rosbag
 from matplotlib.animation import FuncAnimation
-
 
 
 # Read recording
@@ -142,6 +142,7 @@ h,  w = 480, 640
 newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w,h), 1, (w,h))
 
 
+
 def animate(g):
     global image_np
     global framei
@@ -165,11 +166,20 @@ def animate(g):
     global dist
     global mtx
     global roi
+
     i = next(bg)
     # read ros Topic camera or radar
-    if i.topic == '/usb_cam/image_raw/compressed':
-        np_arr = np.frombuffer(i.message.data, np.uint8)
-        image_np = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+    if i.topic == '/usb_cam/image_raw/compressed' or i.topic == '/image_raw':
+        if i.topic == '/image_raw':
+            np_arr = np.frombuffer(i.message.data, np.uint8)
+            # image_np = cv2.imdecode(np_arr, cv2.IMREAD_)
+            image_np = imgmsg_to_cv2(i.message)
+            image_np = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
+
+        else:
+            np_arr = np.frombuffer(i.message.data, np.uint8)
+            image_np = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        # print(image_np)
         # mapx, mapy = cv2.initUndistortRectifyMap(mtx, dist, None, newcameramtx, (640, 480), 5)
         # image_np = cv2.remap(image_np, mapx, mapy, cv2.INTER_LINEAR)
         # # crop the image
@@ -184,7 +194,7 @@ def animate(g):
                 x = [obtk[0][0] for obtk in tracked_object[tk].tracklet]
                 y = [obtk[0][1] for obtk in tracked_object[tk].tracklet]
                 axs.plot(x, y, mew=0)
-    elif i.topic == '/radar_data' or 'radar_data':
+    elif i.topic == '/radar_data' or i.topic == 'radar_data' or i.topic == '/Radar':
         # print(i[2])
         # print(i.message.time_stamp)
         # select closest image to radar frame
@@ -210,21 +220,29 @@ def animate(g):
         # t_array = []
         # print(dt)
         plt.cla()
+
         # record time (Radar time)
-        tm = i.message.time_stamp[0]/10**6
+
         axs.set_xlim(-50, 80)
-        axs.set_ylim(0, 100)
+        axs.set_ylim(-50, 100)
         # convert SRS message to Numpy
-        arr = convert_to_numpy(i.message.points)
-        axs.scatter(arr[:, 0], arr[:, 1], s=0.5)
+        if i.topic == '/Radar':
+            npts = i.message.width
+            arr = pc2_numpy(i.message, npts)
+            tm = i.message.header.stamp.to_sec()
+        else:
+            tm = i.message.time_stamp[0] / 10 ** 6
+            arr = convert_to_numpy(i.message.points)
+
         # Filter zero doppler points
         arr = filter_zero(arr)
+        axs.scatter(arr[:, 0], arr[:, 1], s=0.5)
         # draw points on plt figure
 
         pc = arr[:, :4]
         ped_box = np.empty((0, 5))
         # Perform class specific DBSCAN
-        total_box, cls = dbscan_cluster(pc, eps=1.5, min_sample=20, axs=axs)
+        total_box, cls = dbscan_cluster(pc, eps=1.5, min_sample=15, axs=axs)
         # Do pedestrian if required
         # ped_box, ped_cls = dbscan_cluster(pc, eps=2, min_sample=10)
 

@@ -3,6 +3,11 @@ import matplotlib.pyplot as plt
 import cv2
 from sklearn.cluster import DBSCAN
 import matplotlib.patches as patches
+import sensor_msgs.point_cloud2 as pc2
+from sensor_msgs.msg import Image
+import sys
+
+
 
 def project_to_image(points, proj_mat):
     """
@@ -154,7 +159,7 @@ def convert_to_numpy(pc):
 
 def filter_zero(pc):
     """Filter low velocity points"""
-    mask = np.abs(pc[:, 3]) > 0.01
+    mask = np.abs(pc[:, 3]) > 0.05
     pc = pc[mask, :]
     return pc
 
@@ -320,3 +325,45 @@ def timestamp_sync(imgs, t):
             diff = dt
             ind = i
     return ind, diff
+
+
+def pc2_numpy(pc, l):
+    arr = np.zeros((l, 5))
+    for i ,point in enumerate(pc2.read_points(pc, skip_nans=True)):
+        pt_x = point[0]
+        pt_y = point[1]
+        pt_z = point[2]
+        doppler = point[3]
+        if pt_x!= 0 and pt_y != 0 and pt_z != 0:
+            arr[i, 0] = pt_x
+            arr[i, 1] = pt_y
+            arr[i, 2] = pt_z
+            arr[i, 3] = doppler
+        else:
+            arr[i, 0] = 0.1
+            arr[i, 1] = 0.1
+            arr[i, 2] = -100
+            arr[i, 3] = doppler
+    return arr
+
+
+def imgmsg_to_cv2(img_msg):
+    dtype = np.dtype("uint8") # Hardcode to 8 bits...
+    dtype = dtype.newbyteorder('>' if img_msg.is_bigendian else '<')
+    image_opencv = np.ndarray(shape=(img_msg.height, img_msg.width, 3), # and three channels of data. Since OpenCV works with bgr natively, we don't need to reorder the channels.
+                    dtype=dtype, buffer=img_msg.data)
+    # If the byt order is different between the message and the system.
+    if img_msg.is_bigendian == (sys.byteorder == 'little'):
+        image_opencv = image_opencv.byteswap().newbyteorder()
+    return image_opencv
+
+
+def cv2_to_imgmsg(cv_image):
+    img_msg = Image()
+    img_msg.height = cv_image.shape[0]
+    img_msg.width = cv_image.shape[1]
+    img_msg.encoding = "bgr8"
+    img_msg.is_bigendian = 0
+    img_msg.data = cv_image.tostring()
+    img_msg.step = len(img_msg.data) // img_msg.height # That double line is actually integer division, not a comment
+    return img_msg

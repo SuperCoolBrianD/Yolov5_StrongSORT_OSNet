@@ -1,7 +1,7 @@
 import mayavi.mlab as mlab
 import sys
 import pandas as pd
-import sensor_msgs.point_cloud2 as pc2
+
 import cv2
 import pickle
 sys.path.append('yolor')
@@ -66,32 +66,12 @@ calib_pts = []
 cam1 = np.empty((0,0))
 v = (-108.20802358222203, 7.280529894768495, 470.76425650815855, ([12.091, -1.047, -2.0325]))
 
-data = pd.read_csv('testfile.csv', header=None)
 
-def pc2_numpy(pc, l):
-    arr = np.zeros((l, 5))
-    for i ,point in enumerate(pc2.read_points(pc, skip_nans=True)):
-        pt_x = point[0]
-        pt_y = point[1]
-        pt_z = point[2]
-        doppler = point[3]
-        if pt_x!= 0 and pt_y != 0 and pt_z != 0:
-            arr[i, 0] = pt_x
-            arr[i, 1] = pt_y
-            arr[i, 2] = pt_z
-            arr[i, 3] = doppler
-        else:
-            arr[i, 0] = 0.1
-            arr[i, 1] = 0.1
-            arr[i, 2] = -100
-            arr[i, 3] = doppler
-    return arr
 
 
 # print(data)
-print(data[1][0])
 all_bb = []
-print(pickle.HIGHEST_PROTOCOL)
+idx = 0
 for j, i in enumerate(bag.read_messages()):
     # print(i.topic)
     # read ros Topic camera or radar
@@ -100,13 +80,9 @@ for j, i in enumerate(bag.read_messages()):
     if i.topic == '/image_raw':
         np_arr = np.frombuffer(i.message.data, np.uint8)
         image_np = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-        # mapx, mapy = cv2.initUndistortRectifyMap(mtx, dist, None, newcameramtx, (640, 480), 5)
-        # image_np = cv2.remap(image_np, mapx, mapy, cv2.INTER_LINEAR)
-        # # crop the image
-        # x, y, w, h = roi
-        # image_np = image_np[y:y + h, x:x + w]
         cam1 = image_np
     elif i.topic == '/radar_data' or 'radar_data' or '/Radar':
+
         npts = i.message.width
         arr_all = pc2_numpy(i.message, npts)
         arr = filter_zero(arr_all)
@@ -114,15 +90,13 @@ for j, i in enumerate(bag.read_messages()):
         pc = arr[:, :4]
         ped_box = np.empty((0, 5))
         total_box, cls = dbscan_cluster(pc, eps=1, min_sample=20)
+        with open(f'label/{idx}.txt', 'w') as file:
+            if cls:
+                for cc in cls:
+                    bbox = get_bbox_cls_label(cc)
+                    # bbframe.append(bbox)
+                    file.write(' '.join([str(num) for num in bbox]))
+                    file.write('\n')
+                update = 1
+        idx+=1
 
-        bbframe = []
-        if cls:
-            for cc in cls:
-                bbox = get_bbox_cls_label(cc)
-                bbframe.append(bbox)
-                print(bbframe)
-                # print(bbox)
-            update = 1
-        all_bb.append(bbframe)
-with open(r'test.pkl', 'wb') as d:
-    pickle.dump(all_bb, d, 2)
