@@ -82,7 +82,6 @@ for j, i in enumerate(bag.read_messages()):
 
             #while True:
             rx = cv2.getTrackbarPos('rx', 'TrackBar') / 100
-            rx = 1.72
             ry = cv2.getTrackbarPos('ry', 'TrackBar') / 100
             rz = cv2.getTrackbarPos('rz', 'TrackBar') / 100
             tx = cv2.getTrackbarPos('tx', 'TrackBar') / 100

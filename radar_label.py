@@ -91,14 +91,18 @@ for j, i in enumerate(bag.read_messages()):
         # draw points on plt figure
         pc = arr[:, :4]
         ped_box = np.empty((0, 5))
-        total_box, cls = dbscan_cluster(pc, eps=1, min_sample=20)
+        total_box, cls = dbscan_cluster(pc, eps=2, min_sample=20)
         with open(f'label/{idx}.txt', 'w') as file:
+            file.write(
+                '-1.5305334329605103 18.82566261291504 -1.4445815682411194 2 2 2 0 0 0')
+            file.write('\n')
             if cls:
                 for cc in cls:
                     bbox = get_bbox_cls_label(cc)
                     # bbframe.append(bbox)
                     file.write(' '.join([str(num) for num in bbox]))
                     file.write('\n')
+
                 update = 1
             else:
                 missidx+=1

@@ -147,40 +147,25 @@ for j, i in enumerate(bag.read_messages()):
                     bbox = get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], 0)
                     bbox = project_to_image(bbox, r2c)
                     draw_projected_box3d(cam1, bbox)
-                for cc in cls:
-                    # draw_radar(cc, fig=fig, pts_color=(0, 0, 1),
-                    #            pts_scale=2, view=v)
-                    # for ccc in cls:
-                    #     draw_radar(ccc, fig=fig, pts_color=(1, 0, 0),
-                    #                pts_scale=1, view=v)
                     draw_radar(arr_all, fig=fig, pts_scale=0.1, pts_color=(1, 1, 1), view=v)
                     bbox = get_bbox_cls(cc)
                     bbox = get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], 0)
                     draw_gt_boxes3d(bbox, fig=fig)
                     record = True
-                    print('Click on the object in camera or Press c to skip to next object')
                     xyz = np.mean(cc, axis=0).reshape((-1, 1))
-                    print(f'Current object doppler:{xyz[-1, 0]}')
                     xyz = xyz[:3, :]
-
                     new_cam1 = cam1.copy()
-
                     cent = project_to_image(xyz, r2c)
                     cent = (int(cent[0, 0]), int(cent[1, 0]))
                     new_cam1 = cv2.circle(new_cam1, cent, 5, (255, 255, 0), thickness=2)
-                    while nxt is False:
-                        cv2.imshow('Camera', new_cam1)
-                        key = cv2.waitKey(1) & 0xFF
-                        if key == ord('c'):
-                            print('Cannot found in image')
-                            record =False
-                            nxt =True
 
-                    if record is True:
-                        calib_pts.append((xyz.flatten(), img_coord))
-                    print(calib_pts)
-                    nxt = False
-                    v = mlab.view()
-                    mlab.clf()
+                cv2.imshow('Camera', new_cam1)
+                key = cv2.waitKey(0) & 0xFF
+                if key == ord('c'):
+                    print('Cannot found in image')
+                    record =False
+                print(calib_pts)
+                v = mlab.view()
+                mlab.clf()
             print('next frame')
             update = 1
