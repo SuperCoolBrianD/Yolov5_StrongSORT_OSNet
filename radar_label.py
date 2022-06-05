@@ -16,7 +16,7 @@ from matplotlib.animation import FuncAnimation
 
 
 # Read recording
-bag = rosbag.Bag("record/calib.bag")
+bag = rosbag.Bag("record/synch_1.bag")
 
 topics = bag.get_type_and_topic_info()
 
@@ -72,17 +72,19 @@ v = (-108.20802358222203, 7.280529894768495, 470.76425650815855, ([12.091, -1.04
 # print(data)
 all_bb = []
 idx = 0
+missidx = 0
 for j, i in enumerate(bag.read_messages()):
     # print(i.topic)
     # read ros Topic camera or radar
-    if j<120:
-        continue
     if i.topic == '/image_raw':
         np_arr = np.frombuffer(i.message.data, np.uint8)
         image_np = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
         cam1 = image_np
+    elif i.topic == '/Camera':
+        np_arr = np.frombuffer(i.message.data, np.uint8)
+        # image_np = cv2.imdecode(np_arr, cv2.IMREAD_)
+        image_np = imgmsg_to_cv2(i.message)
     elif i.topic == '/radar_data' or 'radar_data' or '/Radar':
-
         npts = i.message.width
         arr_all = pc2_numpy(i.message, npts)
         arr = filter_zero(arr_all)
@@ -98,5 +100,9 @@ for j, i in enumerate(bag.read_messages()):
                     file.write(' '.join([str(num) for num in bbox]))
                     file.write('\n')
                 update = 1
+            else:
+                missidx+=1
         idx+=1
+print(idx)
+print(missidx)
 

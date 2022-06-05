@@ -11,7 +11,7 @@ from matplotlib.animation import FuncAnimation
 
 
 # Read recording
-bag = rosbag.Bag("record/traffic3.bag")
+bag = rosbag.Bag("record/synch_1.bag")
 # bag = rosbag.Bag("record/traffic3.bag")
 # bag = rosbag.Bag("record/traffic1.bag")
 topics = bag.get_type_and_topic_info()
@@ -142,7 +142,7 @@ h,  w = 480, 640
 newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w,h), 1, (w,h))
 
 
-
+idx = 0
 def animate(g):
     global image_np
     global framei
@@ -166,16 +166,19 @@ def animate(g):
     global dist
     global mtx
     global roi
-
+    global idx
     i = next(bg)
     # read ros Topic camera or radar
-    if i.topic == '/usb_cam/image_raw/compressed' or i.topic == '/image_raw':
+    if i.topic == '/usb_cam/image_raw/compressed' or i.topic == '/image_raw' or i.topic == '/Camera':
         if i.topic == '/image_raw':
             np_arr = np.frombuffer(i.message.data, np.uint8)
             # image_np = cv2.imdecode(np_arr, cv2.IMREAD_)
             image_np = imgmsg_to_cv2(i.message)
             image_np = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
-
+        elif i.topic == '/Camera':
+            np_arr = np.frombuffer(i.message.data, np.uint8)
+            # image_np = cv2.imdecode(np_arr, cv2.IMREAD_)
+            image_np = imgmsg_to_cv2(i.message)
         else:
             np_arr = np.frombuffer(i.message.data, np.uint8)
             image_np = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
@@ -334,10 +337,13 @@ def animate(g):
         # print(f'Max dt_no_match = {max(dt_no_match_array)}')
         # print(f'Min dt_no_match = {min(dt_no_match_array)}')
         # print(f'Average dt_no_match = {sum(dt_no_match_array)/len(dt_no_match_array)}')
+        idx +=1
+        print(idx)
 
 
 ani = FuncAnimation(fig, animate, interval=10, frames=2000)
 plt.show()
+
 
 
 """

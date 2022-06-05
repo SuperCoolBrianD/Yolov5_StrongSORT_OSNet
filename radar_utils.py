@@ -6,7 +6,7 @@ import matplotlib.patches as patches
 import sensor_msgs.point_cloud2 as pc2
 from sensor_msgs.msg import Image
 import sys
-
+import mayavi.mlab as mlab
 
 
 def project_to_image(points, proj_mat):
@@ -207,12 +207,12 @@ def get_bbox_cls_label(arr):
 
 
 
-def get_bbox_coord(t1, t2, t3, l, w, h, ry, is_homogenous=False):
+def get_bbox_coord(t1, t2, t3, w, h, l, ry, is_homogenous=False):
     # 3d bounding box dimensions
 
     # 3D bounding box vertices [3, 8]
     z = [l / 2, l / 2, -l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2]
-    y = [0, 0, 0, 0, -h, -h, -h, -h]
+    y = [-h/2, -h/2, -h/2, -h/2, h/2, h/2, h/2, h/2]
     x = [w / 2, -w / 2, -w / 2, w / 2, w / 2, -w / 2, -w / 2, w / 2]
     box_coord = np.vstack([x, y, z])
     R = roty(ry)  # [3, 3]
@@ -224,6 +224,7 @@ def get_bbox_coord(t1, t2, t3, l, w, h, ry, is_homogenous=False):
         points_3d = np.vstack((points_3d, np.ones(points_3d.shape[1])))
 
     return points_3d
+
 
 
 def draw_projected_box3d(image, qs, color=(255, 255, 255), thickness=1):
@@ -367,3 +368,25 @@ def cv2_to_imgmsg(cv_image):
     img_msg.data = cv_image.tostring()
     img_msg.step = len(img_msg.data) // img_msg.height # That double line is actually integer division, not a comment
     return img_msg
+
+def draw_gt_boxes3d(gt_boxes3d, fig, color=(1, 1, 1)):
+    """
+    Draw 3D bounding boxes
+    Args:
+        gt_boxes3d: numpy array (3,8) for XYZs of the box corners
+        fig: figure handler
+        color: RGB value tuple in range (0,1), box line color
+    """
+    for k in range(0, 4):
+        i, j = k, (k + 1) % 4
+        mlab.plot3d([gt_boxes3d[0, i], gt_boxes3d[0, j]], [gt_boxes3d[1, i], gt_boxes3d[1, j]],
+                    [gt_boxes3d[2, i], gt_boxes3d[2, j]], tube_radius=None, line_width=2, color=color, figure=fig)
+
+        i, j = k + 4, (k + 1) % 4 + 4
+        mlab.plot3d([gt_boxes3d[0, i], gt_boxes3d[0, j]], [gt_boxes3d[1, i], gt_boxes3d[1, j]],
+                    [gt_boxes3d[2, i], gt_boxes3d[2, j]], tube_radius=None, line_width=2, color=color, figure=fig)
+
+        i, j = k, k + 4
+        mlab.plot3d([gt_boxes3d[0, i], gt_boxes3d[0, j]], [gt_boxes3d[1, i], gt_boxes3d[1, j]],
+                    [gt_boxes3d[2, i], gt_boxes3d[2, j]], tube_radius=None, line_width=2, color=color, figure=fig)
+    return fig
