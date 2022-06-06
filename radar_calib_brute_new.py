@@ -11,7 +11,7 @@ from radar_utils import *
 from projectutils import draw_radar
 import rosbag
 from matplotlib.animation import FuncAnimation
-
+from vis_util import *
 
 
 # Read recording
@@ -41,13 +41,6 @@ cv2.moveWindow('Camera', 800, 800)
 mtx = np.array([[1113.5, 0., 974.2446],
                 [0.,1113.5,586.6797],
                 [0., 0., 1.]])
-dist = np.array([[-0.06624252, -0.00059409, -0.00183169,  0.0030411,   0.00063524]])
-
-h,  w = 480, 640
-newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w,h), 1, (w,h))
-img_coord = 0
-nxt = False
-
 
 def get_img_local(event, x, y, flags, param):
     global nxt
@@ -133,39 +126,50 @@ for j, i in enumerate(bag.read_messages()):
             # Radar projection onto camera parameters
 
             r2c = cam_radar(rx, ry, rz, tx, ty, tz, mtx)
-            cam1, cam_arr = render_radar_on_image(arr, cam1, r2c, 9000, 9000)
+            new_cam1, cam_arr = render_radar_on_image(arr, cam1, r2c, 9000, 9000)
             rx = cv2.getTrackbarPos('rx', 'TrackBar') / 100
             ry = cv2.getTrackbarPos('ry', 'TrackBar') / 100
             rz = cv2.getTrackbarPos('rz', 'TrackBar') / 100
             tx = cv2.getTrackbarPos('tx', 'TrackBar') / 10
             ty = cv2.getTrackbarPos('ty', 'TrackBar') / 10
             tz = cv2.getTrackbarPos('tz', 'TrackBar') / 10
-            print(rx, ry, rz, tx, ty, tz)
+
             if cls:
                 for cc in cls:
-                    bbox = get_bbox_cls(cc)
-                    bbox = get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], 0)
-                    bbox = project_to_image(bbox, r2c)
-                    draw_projected_box3d(cam1, bbox)
                     draw_radar(arr_all, fig=fig, pts_scale=0.1, pts_color=(1, 1, 1), view=v)
                     bbox = get_bbox_cls(cc)
                     bbox = get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], 0)
                     draw_gt_boxes3d(bbox, fig=fig)
-                    record = True
-                    xyz = np.mean(cc, axis=0).reshape((-1, 1))
-                    xyz = xyz[:3, :]
-                    new_cam1 = cam1.copy()
-                    cent = project_to_image(xyz, r2c)
-                    cent = (int(cent[0, 0]), int(cent[1, 0]))
-                    new_cam1 = cv2.circle(new_cam1, cent, 5, (255, 255, 0), thickness=2)
+                print('Adjust using trackbar, Press c for next frame')
+                while True:
+                    # new_cam1 = cam1.copy()
+                    rx = cv2.getTrackbarPos('rx', 'TrackBar') / 100
+                    ry = cv2.getTrackbarPos('ry', 'TrackBar') / 100
+                    rz = cv2.getTrackbarPos('rz', 'TrackBar') / 100
+                    tx = cv2.getTrackbarPos('tx', 'TrackBar') / 10
+                    ty = cv2.getTrackbarPos('ty', 'TrackBar') / 10
+                    tz = cv2.getTrackbarPos('tz', 'TrackBar') / 10
+                    r2c = cam_radar(rx, ry, rz, tx, ty, tz, mtx)
+                    new_cam1, cam_arr = render_radar_on_image(arr, cam1, r2c, 9000, 9000)
+                    for cc in cls:
+                        bbox = get_bbox_cls(cc)
+                        bbox = get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], 0)
 
-                cv2.imshow('Camera', new_cam1)
-                key = cv2.waitKey(0) & 0xFF
-                if key == ord('c'):
-                    print('Cannot found in image')
-                    record =False
-                print(calib_pts)
+                        bbox = project_to_image(bbox, r2c)
+                        draw_projected_box3d(new_cam1, bbox)
+                        xyz = np.mean(cc, axis=0).reshape((-1, 1))
+                        xyz = xyz[:3, :]
+                        cent = project_to_image(xyz, r2c)
+                        cent = (int(cent[0, 0]), int(cent[1, 0]))
+                        new_cam1 = cv2.circle(new_cam1, cent, 5, (255, 255, 0), thickness=2)
+
+                    cv2.imshow('Camera', new_cam1)
+                    key = cv2.waitKey(1) & 0xFF
+                    if key == ord('c'):
+                        break
                 v = mlab.view()
                 mlab.clf()
+            print(rx, ry, rz, tx, ty, tz)
             print('next frame')
+
             update = 1

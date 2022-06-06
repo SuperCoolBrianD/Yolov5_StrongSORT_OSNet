@@ -1,14 +1,14 @@
-
 import sys
+
+
 sys.path.append('yolor')
 sys.path.append('SVSF_Track')
 # from yolor.detect_custom import init_yoloR, detect
 from SVSF_Track.MTT_Functions import *
-from radar_utils import *
 import sort
+from radar_utils import *
 import rosbag
 from matplotlib.animation import FuncAnimation
-
 
 # Read recording
 bag = rosbag.Bag("record/synch_1.bag")
@@ -24,6 +24,8 @@ for i in topics[1]:
 
 radar_d = '/radar_data'
 # init plt figure
+fig = plt.plot()
+
 fig, axs = plt.subplots(1, figsize=(6, 6))
 fig.canvas.set_window_title('Radar Detection and Tracking IMM')
 # create generator object for recording
@@ -32,6 +34,7 @@ s = 0
 # model, device, colors, names = init_yoloR(weights='yolor/yolor_p6.pt', cfg='yolor/cfg/yolor_p6.cfg',
 #                                           names='yolor/data/coco.names', out='inference/output', imgsz=640)
 # adjust image visualization
+
 cv2.imshow('Camera', np.zeros((480, 640)))
 cv2.moveWindow('Camera', 800, 800)
 image_np = np.empty((5, 5))
@@ -143,6 +146,7 @@ newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w,h), 1, (w,h))
 
 
 idx = 0
+
 def animate(g):
     global image_np
     global framei
@@ -182,6 +186,7 @@ def animate(g):
         else:
             np_arr = np.frombuffer(i.message.data, np.uint8)
             image_np = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        print(image_np.shape)
         # print(image_np)
         # mapx, mapy = cv2.initUndistortRectifyMap(mtx, dist, None, newcameramtx, (640, 480), 5)
         # image_np = cv2.remap(image_np, mapx, mapy, cv2.INTER_LINEAR)
@@ -341,7 +346,9 @@ def animate(g):
         print(idx)
 
 
+
 ani = FuncAnimation(fig, animate, interval=10, frames=2000)
+
 plt.show()
 
 
