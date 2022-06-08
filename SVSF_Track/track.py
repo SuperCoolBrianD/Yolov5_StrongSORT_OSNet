@@ -265,7 +265,8 @@ class track:
             zPred = H@xPred #predict measurement
             
         S = H@P_Pred@H.T + R #innovation co-variance
-        S_inv = np.linalg.inv(S) #innovation co-variance inverse
+        S = .5*(S + S.T)
+        S_inv = np.linalg.pinv(S) #innovation co-variance inverse
         K = P_Pred@H.T@ S_inv #KF gain
         
         cn = math.pi #term used to get the volume of the gated region ellipsoid
@@ -281,7 +282,7 @@ class track:
         gateMeas = np.vstack((xMeas[gatedArr==1],yMeas[gatedArr==1])) #measurements in the gate stacked
         
         
-        abs_det = abs(np.linalg.det(2*math.pi*S)) #term used to get the likelihood ratio 
+        abs_det = abs(np.linalg.det(2*math.pi*S)) #term used to get the likelihood ratio
         #T =   1/(  ((2*math.pi)**(m/2)) *math.sqrt(abs_det_S))
         T = 1/(math.sqrt(abs_det)) #term used to get the likelihood ratio
         innovations = np.zeros((m,m_k)) #innovation vectors
@@ -298,10 +299,14 @@ class track:
             prob_z_i_Vals[i]=prob_z_i
           #  probZ_Sum = probZ_Sum+ prob_z_i
         probZ_Sum = sum(prob_z_i_Vals) #sum of probabilities 
-        
+
+        #print(mHat)
         if m_k==0:
             delta_k = PD*PG #if m_k is zero use this formula to get the delta_k term
         else:
+            if mHat == 0:
+                mHat = mHat + 1E-100
+
             delta_k = PD*PG- PD*PG*(V_k/mHat)*probZ_Sum #otherwise, apply this formula to obtain delta_k
             
         pCurrent = ((1-delta_k)/(1-delta_k*pPred))*pPred #update probability of track existence
@@ -501,6 +506,7 @@ class track:
                     Kl = P_Pred_21@H_1.T@S_inv #KF lower gain
                 else:
                     Kl = np.diag(E_y * sat(M @ePred,psiY)) @ linalg.pinv(np.diag(M@ePred)) @ M #CMSVSF lower gain
+                    print('SVSF')
             elif modelType=="CT":
                 if psiY_opt[0,0] <psiY[0] and psiY_opt[1,1] < psiY[1] and psiY_opt[2,2] < psiY[2]:
                     Kl = P_Pred_21@H_1.T@S_inv #KF lower gain
@@ -511,6 +517,7 @@ class track:
                     Kl = P_Pred_21@H_1.T@S_inv #KF lower gain
                 else:
                     Kl = np.diag(E_y * sat(M @ePred,psiY)) @ linalg.pinv(np.diag(M@ePred)) @ M #CMSVSF lower gain
+                    print('SVSF')
             #K = np.block([Ku,Kl]).T #stacked gain
             K = np.vstack((Ku,Kl))      
             P_c = P_Pred - K@H@P_Pred - P_Pred@H.T@K.T + K@S@K.T #update covariance
@@ -715,9 +722,9 @@ class track:
         self.xPost = xPostNew
         self.P_Post = P_PostNew
         self.ePost = ePost
-        self.pCurrent = pCurrent
         self.zPred = zPred
         self.S = S
+        self.pCurrent = pCurrent
         
         return xPostNew,P_PostNew
     

@@ -11,7 +11,7 @@ from scipy import linalg
 from scipy.linalg import sqrtm
 from scipy.stats.distributions import chi2
 import random
-# from track import*
+from track import*
 from track_MM import*
 
 def CVModel(xVec,Q,Ts):
@@ -46,7 +46,7 @@ def CTModel(xVec,Q,Ts):
     vx_k = xVec[2]
     vy_k = xVec[3]
     omega_k = xVec[6]
-
+    
     G_k = np.array([[(Ts**2)/2, 0,0],
                     [0, (Ts**2)/2,0],
                     [Ts,0,0],
@@ -165,13 +165,25 @@ def getRange(xVec,sensorPos):
 def getAngle(xVec,sensorPos):
     xS = sensorPos[0]
     yS = sensorPos[1]
-    
+
     x_k = xVec[0]
     y_k = xVec[1]
-    
+
     theta = atan2(y_k-yS, x_k-xS)
     
     return theta
+
+def getRangeRate(xVec,sensorPos):
+    R = getRange(xVec,sensorPos)
+
+    x_k = xVec[0]
+    y_k = xVec[1]
+    vx_k = xVec[2]
+    vy_k = xVec[3]
+
+    rDot = (x_k*vx_k + y_k*vy_k)/R
+
+    return rDot
 
 def obtain_Jacobian_H(xVec,sensorPos):
     n = xVec.shape[0] #number of states
@@ -481,16 +493,20 @@ def initiateTracksMM(trackList,lastTrackIdx,measSet, maxVals,G_List,H,Q_List,R,m
             j=j+1 #index of new track
             z_i = measSet[:,i] #ith measurement 
             
-            trackMM_j = track_MM(z_i,G_List,H,Q_List,R,maxVals,pInit,startSample,Ts,models,filters,sensor,N) #initiate jth track
+            trackMM_j = track_MM(z_i,G_List,H,Q_List,R,maxVals,pInit,startSample,Ts,models,filters,sensor,N) #initiate jth track 
             trackList[j] = trackMM_j #store track at position j in trackList
            
         lastTrackIdx = j #index of last track
     return trackList,lastTrackIdx
 
 
-def updateStateTracks(trackList,lastTrackIdx, filterType,measSet, maxVals,lambdaVal,MP,PG,PD,sensorPos,T_mat, gammaZ, gammaY, psiZ, psiY,k):
+def updateStateTracks(trackList,lastTrackIdx, filterType,measSet, maxVals,lambdaVal,MP,PG,PD,sensorPos,SVSFParams,k):
     #updates the state and co-variance of each track using a filter
-    
+    psiZ = SVSFParams[0]
+    psiY = SVSFParams[1]
+    gammaZ = SVSFParams[2]
+    gammaY = SVSFParams[3]
+    T_mat = SVSFParams[4]
     #numTracks = len(trackList)
     numTracks = lastTrackIdx + 1 
 #    if numTracks>0:
@@ -535,7 +551,7 @@ def updateStateTracks(trackList,lastTrackIdx, filterType,measSet, maxVals,lambda
                 track_i.stackBL(k)
             elif filterType == "IMMIPDAKF":
                 #track_i.IMMIPDAKF(measSet,MP,PD,PG,lambdaVal,maxVals,sensorPos)
-                track_i.IMMIPDA_Filter(measSet,MP,PD,PG,lambdaVal,maxVals,sensorPos)
+                track_i.IMMIPDA_Filter(measSet,MP,PD,PG,lambdaVal,SVSFParams,maxVals,sensorPos)
             track_i.stackState(k) #store the state estimate into the track's array
             
             trackList[i] = track_i #store updated track i
@@ -583,6 +599,7 @@ def updateTracksStatus(trackList,lastTrackIdx,delTenThr, delConfThr, confTenThr,
                 trackList[i].endSample = k
             elif p>=confTenThr: #if above the confirmation threshold
                 trackList[i].status = 2 #confirm track, set that status as confirmed
+                trackList[i].latency = k - trackList[i].startSample
         elif status==2: #if the track is confirmed
             if p<delConfThr: #if below the deletion threshold
                 trackList[i].status = 0  #removed confirmed track
