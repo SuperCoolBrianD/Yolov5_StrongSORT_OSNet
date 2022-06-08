@@ -52,7 +52,7 @@ class track_MM:
         if r==2:
             uVec0 = np.array([1/2,1/2])
         elif r==3:
-            uVec0 = np.array([1/3,1/3,1/3])
+            uVec0 = np.array([1./3,1./3,1./3])
         elif r==3:
             uVec0 = np.array([1/4,1/4,1/4,1/4])
             
@@ -74,7 +74,6 @@ class track_MM:
         self.R = R #measurement noise co-variance
         self.H = H #measurement matrix
         self.isMM = True#if the tracker applies a multiple model filter
-        self.endSample = None
         #self.pCurrent = pCurrents
         
     def IMMIPDAKF(self,measSet,MP,PD,PG,lambdaVal,maxVals,sensorPos):
@@ -129,8 +128,8 @@ class track_MM:
                x_i = modeTrackList[i].xPost
                P_i = modeTrackList[i].P_Post
                 
-               if modelList[j]== "CT" and (modelList[i] == "CV" or modelList[i]=="CA"):
-                   weightSumMat[6,6] = (omegaMax/5)**2
+               if modelList[j]== "CT" and modelList[i] == "CV":
+                   weightSumMat[6,6] = (omegaMax/10)**2
                elif modelList[j]=="CA" and modelList[i] == "CV":
                    weightSumMat[4,4] = (maxAcc/30)**2
                    weightSumMat[5,5]= (maxAcc/30)**2
@@ -264,10 +263,10 @@ class track_MM:
                P_i = modeTrackList[i].P_Post
                 
                if modelList[j]== "CT" and (modelList[i] == "CV" or modelList[i]=="CA"):
-                   weightSumMat[6,6] = (omegaMax)**2
+                   weightSumMat[6,6] = (omegaMax/5)**2
                elif modelList[j]=="CA" and modelList[i] == "CV":
-                   weightSumMat[4,4] = (maxAcc/25)**2
-                   weightSumMat[5,5]= (maxAcc/25)**2
+                   weightSumMat[4,4] = (maxAcc/30)**2
+                   weightSumMat[5,5]= (maxAcc/30)**2
                     
                weightSumMat = weightSumMat + uMatMix[i,j]*(P_i + np.outer(x_i-x0_j, x_i-x0_j) )
                 
@@ -278,14 +277,21 @@ class track_MM:
         self.modeTrackList = modeTrackList
         self.cVec = cVec
            
-    def IMMIPDA_Filter(self,measSet,MP,PD,PG,lambdaVal,maxVals,sensorPos):
+    def IMMIPDA_Filter(self,measSet,MP,PD,PG,lambdaVal,SVSFParams,maxVals,sensorPos):
         #Performs the steps required for state estimation, steps 1-3
         xPost = self.xPost
         modeTrackList = self.modeTrackList #list of mode-conditioned tracks
         uVec = self.uVec #mode probabilities
         cVec = self.cVec #cVec from initialization
         modelList = self.models #models for IMM estimator
+        filters = self.filters #filters for the IMM estimator
         gateArr = self.gateArr #binary array indicating which measurements have been associated to the track
+        
+        psiZ = SVSFParams[0]
+        psiY = SVSFParams[1]
+        gammaZ = SVSFParams[2]
+        gammaY = SVSFParams[3]
+        T_mat = SVSFParams[4]
         
         gateArr = gateArr.astype(int) #convert array values to integer
         ng= sum(gateArr) #number of measurements in the gate
@@ -304,7 +310,16 @@ class track_MM:
             modeTrack_i = modeTrackList[i] #mode-conditioned track
             modeTrack_i.gateArr = gateArr #stores the union 
             
-            modeTrack_i.IPDAKF(measSet, MP, PD, PG, lambdaVal, sensorPos) #update state of mode-conditioned track
+            filterType = filters[i]
+            
+            #update state of mode-conditioned track using the specified filter
+            if filterType == "IPDAKF":
+                modeTrack_i.IPDAKF(measSet, MP, PD, PG, lambdaVal, sensorPos) 
+            elif filterType == "IPDASVSF":
+                modeTrack_i.IPDASVSF(measSet,MP,PD,PG,lambdaVal,sensorPos,T_mat,gammaZ,gammaY,psiZ,psiY)
+            elif filterType == "IPDAGVBLSVSF":
+                modeTrack_i.IPDAGVBLSVSF(measSet,MP,PD,PG,lambdaVal,sensorPos,T_mat,gammaZ,gammaY,psiZ,psiY)
+            
             zPred = modeTrack_i.zPred
             S = modeTrack_i.S
             
@@ -358,15 +373,34 @@ class track_MM:
         return xEst, pEst, uVec
         
         
-
     def stackState(self,k): 
         #stores the state estimate from time step k
         xEsts = self.xEsts #array of state estimates
         xEsts[:,k] = self.xPost #include state estimate in the array
         
     def stackBL(self,k):
-        BLs = self.BLs
-        BLs[:,k] = self.BL_Vec
+        isMM = self.isMM
+        modeTrackList = self.modeTrackList
+        xPost = self.xPost
+        n = xPost.shape[0] #number of states
+        
+        BLs = self.BLs #array of BL widths
+
+        if isMM == True: #if the filter is a IMM type
+            uVec = self.uVec
+            r = len(uVec) #number of models
+            filters = self.filters
+            
+            
+            if filters[0] == "IPDAGVBLSVSF":
+                BL_Vec = np.zeros((n,))
+                for i in range(r):
+                    BL_Vec_i = modeTrackList[i].BL_Vec
+                    u_i = uVec[i]
+                    BL_Vec = BL_Vec + BL_Vec_i*u_i
+            BLs[:,k] = BL_Vec
+        else:        
+            BLs[:,k] = self.BL_Vec
         
         self.BLs = BLs
         

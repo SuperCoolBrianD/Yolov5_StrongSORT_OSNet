@@ -56,7 +56,7 @@ class track:
         self.H = H
         self.G = G
         self.pCurrent = pInit
-        self.endSample =None
+        
         n = xPost0.shape[0] #dimension of state vector
         xEsts = np.zeros((n,N)) #array of state estimates initialized 
         
@@ -265,8 +265,7 @@ class track:
             zPred = H@xPred #predict measurement
             
         S = H@P_Pred@H.T + R #innovation co-variance
-        S = .5*(S + S.T)
-        S_inv = np.linalg.pinv(S) #innovation co-variance inverse
+        S_inv = np.linalg.inv(S) #innovation co-variance inverse
         K = P_Pred@H.T@ S_inv #KF gain
         
         cn = math.pi #term used to get the volume of the gated region ellipsoid
@@ -299,8 +298,7 @@ class track:
             prob_z_i_Vals[i]=prob_z_i
           #  probZ_Sum = probZ_Sum+ prob_z_i
         probZ_Sum = sum(prob_z_i_Vals) #sum of probabilities 
-
-        #print(mHat)
+        
         if m_k==0:
             delta_k = PD*PG #if m_k is zero use this formula to get the delta_k term
         else:
@@ -554,6 +552,8 @@ class track:
         self.xPost = xPostNew
         self.P_Post = P_PostNew
         self.ePost = ePost
+        self.zPred = zPred
+        self.S = S
         self.pCurrent = pCurrent
         self.BL_Vec = BL_Vec
         
@@ -716,6 +716,8 @@ class track:
         self.P_Post = P_PostNew
         self.ePost = ePost
         self.pCurrent = pCurrent
+        self.zPred = zPred
+        self.S = S
         
         return xPostNew,P_PostNew
     
