@@ -5,7 +5,7 @@ import cv2
 
 sys.path.append('yolor')
 sys.path.append('SVSF_Track')
-from yolor.detect_custom import init_yoloR, detect
+# from yolor.detect_custom import init_yoloR, detect
 from SVSF_Track.MTT_Functions import *
 from radar_utils import *
 from projectutils import draw_radar

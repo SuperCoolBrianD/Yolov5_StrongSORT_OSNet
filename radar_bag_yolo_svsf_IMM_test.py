@@ -9,7 +9,7 @@ import rosbag
 from matplotlib.animation import FuncAnimation
 
 # Read recording
-bag = rosbag.Bag("record/traffic3.bag")
+bag = rosbag.Bag("record/car.bag")
 # bag = rosbag.Bag("record/traffic3.bag")
 # bag = rosbag.Bag("record/traffic1.bag")
 topics = bag.get_type_and_topic_info()
@@ -23,7 +23,7 @@ for i in topics[1]:
 radar_d = '/radar_data'
 # init plt figure
 fig, axs = plt.subplots(1, figsize=(6, 6))
-fig.canvas.set_window_title('Radar Detection and Tracking IMM')
+fig.canvas.set_window_title('Radar Detection and Tracking IMM_small')
 # create generator object for recording
 bg = bag.read_messages()
 s = 0
@@ -160,19 +160,13 @@ dt_array = []
 dt_no_match_array = []
 
 
-mtx = np.array([[1113.5, 0., 974.2446],
-                [0.,1113.5,586.6797],
+mtx = np.array([[748, 0., 655.5],
+                [0.,746.6,390.11],
                 [0., 0., 1.]])
-
+cam_msg = 0
 # mtx = np.array([[234.45076996, 0., 334.1804498],
 #                 [0.,311.6748573,241.50825294],
 #                 [0., 0., 1.]])
-dist = np.array([[-0.06624252, -0.00059409, -0.00183169,  0.0030411,   0.00063524]])
-
-h,  w = 480, 640
-newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w,h), 1, (w,h))
-
-
 def animate(g):
     global image_np
     global framei
@@ -196,9 +190,12 @@ def animate(g):
     global dist
     global mtx
     global roi
+    global cam_msg
+
     i = next(bg)
     # read ros Topic camera or radar
     if i.topic == '/usb_cam/image_raw/compressed' or i.topic == '/image_raw' or i.topic == '/Camera':
+        cam_msg = i.message.header.stamp.to_sec()
         if i.topic == '/image_raw':
             image_np = imgmsg_to_cv2(i.message)
             image_np = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
@@ -207,6 +204,7 @@ def animate(g):
         else:
             np_arr = np.frombuffer(i.message.data, np.uint8)
             image_np = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
         # print(image_np)
         # mapx, mapy = cv2.initUndistortRectifyMap(mtx, dist, None, newcameramtx, (640, 480), 5)
         # image_np = cv2.remap(image_np, mapx, mapy, cv2.INTER_LINEAR)
@@ -270,7 +268,7 @@ def animate(g):
         pc = arr[:, :4]
         ped_box = np.empty((0, 5))
         # Perform class specific DBSCAN
-        total_box, cls = dbscan_cluster(pc, eps=0.2, min_sample=15, axs=axs)
+        total_box, cls = dbscan_cluster(pc, eps=3, min_sample=15, axs=axs)
         # Do pedestrian if required
         # ped_box, ped_cls = dbscan_cluster(pc, eps=2, min_sample=10)
 
@@ -344,22 +342,24 @@ def animate(g):
                     if tracked_object[tk].life == 0:
                         alive_track.remove(tk)
         if cam1.any():
+            print(cam_msg)
+            print(f"dt = {i.message.header.stamp.to_sec() - cam_msg}")
             # yolo detection
             # cam1, detection = detect(source=cam1, model=model, device=device, colors=colors, names=names,
             #                              view_img=False)
             # Radar projection onto camera parameters
             ry = 0
-            rz = .02
-            tx = 0.1
+            rz = .05
+            tx = 0.7
             ty = 0.01
-            tz = 0.1
-            rx = 1.62
+            tz = 0
+            rx = 1.58
             r2c = cam_radar(rx, ry, rz, tx, ty, tz, mtx)
             if cls:
                 for cc in cls:
                     bbox = get_bbox_cls(cc)
                     # print(bbox)
-                    bbox = get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[5], bbox[3], bbox[4], 0)
+                    bbox = get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], 0)
                     bbox = project_to_image(bbox, r2c)
                     pts = project_to_image(cc.T, r2c)
                     # print(pts)
