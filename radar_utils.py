@@ -11,6 +11,7 @@ from sensor_msgs.msg import Image
 import sys
 
 
+
 def project_to_image(points, proj_mat):
     """
     Apply the perspective projection
@@ -232,7 +233,7 @@ def get_bbox_cls_label(arr, clf):
 
 
 
-def get_bbox_coord(t1, t2, t3, w, h, l, ry, is_homogenous=False):
+def get_bbox_coord(t1, t2, t3, w, h, l, rz, is_homogenous=False):
     # 3d bounding box dimensions
 
     # 3D bounding box vertices [3, 8]
@@ -240,7 +241,7 @@ def get_bbox_coord(t1, t2, t3, w, h, l, ry, is_homogenous=False):
     y = [-h/2, -h/2, -h/2, -h/2, h/2, h/2, h/2, h/2]
     x = [w / 2, -w / 2, -w / 2, w / 2, w / 2, -w / 2, -w / 2, w / 2]
     box_coord = np.vstack([x, y, z])
-    R = roty(ry)  # [3, 3]
+    R = rotz(rz)  # [3, 3]
     points_3d = R @ box_coord
     points_3d[0, :] = points_3d[0, :] + t1
     points_3d[1, :] = points_3d[1, :] + t2
@@ -390,16 +391,16 @@ def pc2_numpy(pc, l):
         pt_y = point[1]
         pt_z = point[2]
         doppler = point[3]
-        if pt_x!= 0 and pt_y != 0 and pt_z != 0:
-            arr[i, 0] = pt_x
-            arr[i, 1] = pt_y
-            arr[i, 2] = pt_z
-            arr[i, 3] = doppler
-        else:
-            arr[i, 0] = 0.1
-            arr[i, 1] = 0.1
-            arr[i, 2] = -100
-            arr[i, 3] = doppler
+        # if pt_x!= 0 and pt_y != 0 and pt_z != 0:
+        arr[i, 0] = pt_x
+        arr[i, 1] = pt_y
+        arr[i, 2] = pt_z
+        arr[i, 3] = doppler
+        # else:
+        #     arr[i, 0] = 0.1
+        #     arr[i, 1] = 0.1
+        #     arr[i, 2] = -100
+        #     arr[i, 3] = doppler
     return arr
 
 
@@ -460,3 +461,16 @@ def cam_fov_pts(radar_pts, calib, img_width, img_height):
     imgfov_pc_velo = radar_pts[inds, :]
 
     return imgfov_pc_velo
+
+
+def in_hull(p, hull):
+    from scipy.spatial import Delaunay
+    if not isinstance(hull,Delaunay):
+        hull = Delaunay(hull)
+    return hull.find_simplex(p)>=0
+
+
+def extract_pc_in_box3d(pc, box3d):
+    ''' pc: (N,3), box3d: (8,3) '''
+    box3d_roi_inds = in_hull(pc[:,0:4], box3d)
+    return pc[box3d_roi_inds,:], box3d_roi_inds

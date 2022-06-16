@@ -38,7 +38,7 @@ def find_gt(r_box, c_box):
     '''
     Match radar and camera detection using 2D boxes
     '''
-    matched = [[], 'No_Match', 0]
+    matched = [[], 'no_match', 0]
     max_iou = 0
 
     for i in c_box:

@@ -91,6 +91,7 @@ for j, i in enumerate(bag.read_messages()):
                 bbox = get_bbox_cls(cc)
                 # print(bbox)
                 bbox = get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], 0)
+
                 bbox = project_to_image(bbox, r2c)
                 pts = project_to_image(cc.T, r2c)
                 # print(pts)
@@ -110,9 +111,9 @@ for j, i in enumerate(bag.read_messages()):
                     # cv2.rectangle(image_np, mbox2s[0], mbox2s[1], (255, 255, 0))
                     # cv2.imshow('no detection', image_np)
                     # cv2.waitKey(100)
-        cv2.imshow('detection', image_np_detection)
-        cv2.imshow('no detection', image_np)
-        cv2.waitKey(1)
+        # cv2.imshow('detection', image_np_detection)
+        # cv2.imshow('no detection', image_np)
+        # cv2.waitKey(1)
         # idx+=1
         frame.clear_data()
         file.close()
