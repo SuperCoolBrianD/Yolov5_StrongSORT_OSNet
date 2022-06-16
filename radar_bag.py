@@ -2,7 +2,7 @@ import mayavi.mlab as mlab
 import rosbag
 from projectutils import draw_radar
 from retina_view.msg import MsgRadarPoint
-from radar_utils import *
+
 import time
 # Press the green button in the gutter to run the script.
 

@@ -2,7 +2,7 @@ import sys
 sys.path.append('yolor')
 sys.path.append('SVSF_Track')
 from radar_utils import *
-# from yolor.detect_custom import init_yoloR, detect
+from yolor.detect_custom import init_yoloR, detect
 from SVSF_Track.MTT_Functions import *
 
 import rosbag
@@ -27,8 +27,8 @@ fig.canvas.set_window_title('Radar Detection and Tracking IMM_small')
 # create generator object for recording
 bg = bag.read_messages()
 s = 0
-# model, device, colors, names = init_yoloR(weights='yolor/yolor_p6.pt', cfg='yolor/cfg/yolor_p6.cfg',
-#                                           names='yolor/data/coco.names', out='inference/output', imgsz=640)
+model, device, colors, names = init_yoloR(weights='yolor/yolor_p6.pt', cfg='yolor/cfg/yolor_p6.cfg',
+                                           names='yolor/data/coco.names', out='inference/output', imgsz=1280)
 # adjust image visualization
 cv2.imshow('Camera', np.zeros((480, 640)))
 cv2.moveWindow('Camera', 800, 800)
@@ -253,16 +253,16 @@ def animate(g):
         # convert SRS message to Numpy
         if i.topic == '/Radar':
             npts = i.message.width
-            arr = pc2_numpy(i.message, npts)
+            arr_all = pc2_numpy(i.message, npts)
             tm = i.message.header.stamp.to_sec()
         else:
             tm = i.message.time_stamp[0] / 10 ** 6
-            arr = convert_to_numpy(i.message.points)
+            arr_all = convert_to_numpy(i.message.points)
 
         # Filter zero doppler points
-        axs.scatter(arr[:, 0], arr[:, 1], s=0.5)
-        arr = filter_zero(arr)
 
+        arr = filter_zero(arr_all)
+        axs.scatter(arr[:, 0], arr[:, 1], s=0.5)
         # draw points on plt figure
 
         pc = arr[:, :4]
@@ -345,11 +345,11 @@ def animate(g):
             print(cam_msg)
             print(f"dt = {i.message.header.stamp.to_sec() - cam_msg}")
             # yolo detection
-            # cam1, detection = detect(source=cam1, model=model, device=device, colors=colors, names=names,
-            #                              view_img=False)
+            cam1, detection = detect(source=cam1, model=model, device=device, colors=colors, names=names,
+                                         view_img=False)
             # Radar projection onto camera parameters
             ry = 0
-            rz = .05
+            rz = .01
             tx = 0.7
             ty = 0.01
             tz = 0
@@ -365,8 +365,8 @@ def animate(g):
                     # print(pts)
                     box2d = get_bbox_2d(pts.T)
                     cv2.rectangle(cam1, box2d[0], box2d[1], (255,255,0))
-                    draw_projected_box3d(cam1, bbox)
-            img, cam_arr = render_radar_on_image(arr, cam1, r2c, 9000, 9000)
+                    # draw_projected_box3d(cam1, bbox)
+            img, cam_arr = render_radar_on_image(arr_all, cam1, r2c, 9000, 9000)
             cv2.imshow('Camera', img)
             cv2.waitKey(1)
             update = 1

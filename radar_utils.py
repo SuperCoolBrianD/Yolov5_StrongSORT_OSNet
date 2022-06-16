@@ -11,7 +11,6 @@ from sensor_msgs.msg import Image
 import sys
 
 
-
 def project_to_image(points, proj_mat):
     """
     Apply the perspective projection
@@ -63,7 +62,7 @@ def rotz(t):
                      [0, 0, 1]])
 
 
-def radar_cam(rx, ry, rz, tx, ty, tz):
+def extrinsic_matrix(rx, ry, rz, tx, ty, tz):
     rx = rotx(rx)
     ry = roty(ry)
     rz = rotz(rz)
@@ -77,12 +76,36 @@ def radar_cam(rx, ry, rz, tx, ty, tz):
     return r@t
 
 
+def c_extrinsic_matrix(rx, ry, rz, tx, ty, tz):
+    rx = rotx(rx)
+    ry = roty(ry)
+    rz = rotz(rz)
+    R = rx@ry@rz
+    C = np.array([[tx, ty, tz]]).T
+    t = -R@C
+    mtr = np.eye(4)
+    mtr[:3, :3] = R.T
+    mtr[:3, 2] = t
+    return mtr
+
+
+
 def cam_radar(rx, ry, rz, tx, ty, tz, c):
     cam_matrix = np.eye(4)
     cam_matrix[:3, :3] = c
-    radar_matrix = radar_cam(rx, ry, rz, tx, ty, tz)
+    extrinsic = extrinsic_matrix(rx, ry, rz, tx, ty, tz)
     # print(radar_matrix)
-    proj_radar2cam = cam_matrix@radar_matrix
+    proj_radar2cam = cam_matrix@extrinsic
+    # print(cam_matrix)
+    return proj_radar2cam
+
+
+def camera_pose(rx, ry, rz, tx, ty, tz, c):
+    cam_matrix = np.eye(4)
+    cam_matrix[:3, :3] = c
+    extrinsic = extrinsic_matrix(rx, ry, rz, tx, ty, tz)
+    # print(radar_matrix)
+    proj_radar2cam = cam_matrix@extrinsic
     # print(cam_matrix)
     return proj_radar2cam
 
@@ -90,7 +113,6 @@ def cam_radar(rx, ry, rz, tx, ty, tz, c):
 def render_radar_on_image(pts_radar, img, proj_radar2cam, img_width, img_height):
     """functions to project radar points on image"""
     # projection matrix (project from velo2cam2)
-    # todo change to use actual camera intrinsic from calibration
     img = img.copy()
     # apply projection
     pts_2d = project_to_image(pts_radar.transpose(), proj_radar2cam)
@@ -197,7 +219,7 @@ def get_bbox_cls(arr):
                       x_max-x_min, y_max-y_min, z_max-z_min, 0])
 
 
-def get_bbox_cls_label(arr):
+def get_bbox_cls_label(arr, clf):
     x_coord, y_coord, z_coord = arr[:, 0], arr[:, 1], arr[:, 2]
     x_min = min(x_coord)
     x_max = max(x_coord)
@@ -206,7 +228,7 @@ def get_bbox_cls_label(arr):
     z_min = min(z_coord)
     z_max = max(z_coord)
     return [x_min+(x_max-x_min)/2, y_min+(y_max-y_min)/2, z_min+(z_max-z_min)/2,
-                      x_max-x_min, y_max-y_min, z_max-z_min, 0, 0, 0]
+                      x_max-x_min, y_max-y_min, z_max-z_min, 0, 0, 0, clf]
 
 
 
@@ -321,6 +343,35 @@ class radar_object:
             self.speed = 'Measuring'
 
 
+class SRS_data_frame:
+    def __init__(self):
+        self.camera = None
+        self.radar = None
+        self.has_radar = False
+        self.has_camera = False
+        self.full_data = False
+        self.radar_frame = 0
+        self.camera_frame = 0
+    def load_data(self, data):
+        if data.topic == '/Radar':
+            self.radar = data
+            self.has_radar = True
+            self.radar_frame +=1
+        elif data.topic == '/Camera':
+            self.camera = data
+            self.has_camera = True
+            self.camera_frame+=1
+        if self.has_radar and self.has_camera:
+            self.full_data = True
+        return data.topic
+    def clear_data(self):
+        self.camera = None
+        self.radar = None
+        self.has_radar = False
+        self.has_camera = False
+        self.full_data = False
+
+
 def timestamp_sync(imgs, t):
     diff = 10000
     ind = 0
@@ -395,3 +446,17 @@ def draw_gt_boxes3d(gt_boxes3d, fig, color=(1, 1, 1)):
         mlab.plot3d([gt_boxes3d[0, i], gt_boxes3d[0, j]], [gt_boxes3d[1, i], gt_boxes3d[1, j]],
                     [gt_boxes3d[2, i], gt_boxes3d[2, j]], tube_radius=None, line_width=2, color=color, figure=fig)
     return fig
+
+
+def cam_fov_pts(radar_pts, calib, img_width, img_height):
+    # apply projection
+    pts_2d = project_to_image(radar_pts.transpose(), calib)
+
+    # Filter lidar points to be within image FOV
+    inds = np.where((pts_2d[0, :] < img_width) & (pts_2d[0, :] >= 0) &
+                    (pts_2d[1, :] < img_height) & (pts_2d[1, :] >= 0) &
+                    (radar_pts[:, 0] > 0)
+                    )[0]
+    imgfov_pc_velo = radar_pts[inds, :]
+
+    return imgfov_pc_velo

@@ -417,7 +417,7 @@ def draw_radar(pc,
     Returns:
         fig: created or used fig
     '''
-
+    mlab.view(*view)
     pts_mode = 'sphere'
     if fig is None:
         fig = mlab.figure(figure=None, bgcolor=bgcolor,
@@ -443,7 +443,7 @@ def draw_radar(pc,
                 color=(0, 1, 0), tube_radius=None, figure=fig)
     mlab.plot3d([0, axes[2, 0]], [0, axes[2, 1]], [0, axes[2, 2]],
                 color=(0, 0, 1), tube_radius=None, figure=fig)
-    mlab.view(*view)
+
     return fig
 
 

@@ -270,7 +270,7 @@ def animate(g):
         pc = arr[:, :4]
         ped_box = np.empty((0, 5))
         # Perform class specific DBSCAN
-        total_box, cls = dbscan_cluster(pc, eps=0.2, min_sample=15, axs=axs)
+        total_box, cls = dbscan_cluster(pc, eps=2, min_sample=20, axs=axs)
         # Do pedestrian if required
         # ped_box, ped_cls = dbscan_cluster(pc, eps=2, min_sample=10)
 
