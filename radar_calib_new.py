@@ -5,17 +5,18 @@ import cv2
 
 sys.path.append('yolor')
 sys.path.append('SVSF_Track')
-from yolor.detect_custom import init_yoloR, detect
+#from yolor.detect_custom import init_yoloR, detect
 from SVSF_Track.MTT_Functions import *
 from radar_utils import *
 from projectutils import draw_radar
 import rosbag
 from matplotlib.animation import FuncAnimation
+from vis_util import *
 
 
 
 # Read recording
-bag = rosbag.Bag("record/synch_1.bag")
+bag = rosbag.Bag("record/calib_high.bag")
 # bag = rosbag.Bag("record/traffic1.bag")
 topics = bag.get_type_and_topic_info()
 
@@ -168,6 +169,9 @@ for j, i in enumerate(bag.read_messages()):
                     cent = project_to_image(xyz, r2c)
                     cent = (int(cent[0, 0]), int(cent[1, 0]))
                     new_cam1 = cv2.circle(new_cam1, cent, 5, (255, 255, 0), thickness=2)
+                    cv2.imshow('Camera', new_cam1)
+                    print(new_cam1.shape)
+                    cv2.waitKey(1)
                     while nxt is False:
                         cv2.imshow('Camera', new_cam1)
                         key = cv2.waitKey(1) & 0xFF

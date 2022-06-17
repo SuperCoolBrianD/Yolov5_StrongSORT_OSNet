@@ -1,7 +1,7 @@
 import sys
 sys.path.append('yolor')
 sys.path.append('SVSF_Track')
-from yolor.detect_custom import init_yoloR, detect
+#from yolor.detect_custom import init_yoloR, detect
 from SVSF_Track.MTT_Functions import *
 from radar_utils import *
 import rosbag
@@ -342,7 +342,7 @@ def animate(g):
             cv2.waitKey(1)
             update = 1
         # print(f'Max dt = {max(dt_array)}')
-        # print(f'Min dt = {min(dt_array)}')
+        # print(f'Min dt = {min(dt_ array)}')
         # print(f'Average dt = {sum(dt_array)/len(dt_array)}')
         # print(f'Max dt_no_match = {max(dt_no_match_array)}')
         # print(f'Min dt_no_match = {min(dt_no_match_array)}')

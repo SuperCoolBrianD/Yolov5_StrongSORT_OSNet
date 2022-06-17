@@ -11,7 +11,6 @@ from sensor_msgs.msg import Image
 import sys
 
 
-
 def project_to_image(points, proj_mat):
     """
     Apply the perspective projection
@@ -472,5 +471,5 @@ def in_hull(p, hull):
 
 def extract_pc_in_box3d(pc, box3d):
     ''' pc: (N,3), box3d: (8,3) '''
-    box3d_roi_inds = in_hull(pc[:,0:4], box3d)
+    box3d_roi_inds = in_hull(pc[:,0:3], box3d)
     return pc[box3d_roi_inds,:], box3d_roi_inds
