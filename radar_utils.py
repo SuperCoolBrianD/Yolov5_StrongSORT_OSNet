@@ -352,7 +352,10 @@ class SRS_data_frame:
         self.full_data = False
         self.radar_frame = 0
         self.camera_frame = 0
+
     def load_data(self, data):
+        if self.full_data:
+            self.clear_data()
         if data.topic == '/Radar':
             self.radar = data
             self.has_radar = True
@@ -364,6 +367,7 @@ class SRS_data_frame:
         if self.has_radar and self.has_camera:
             self.full_data = True
         return data.topic
+
     def clear_data(self):
         self.camera = None
         self.radar = None

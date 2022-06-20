@@ -18,14 +18,14 @@ def convert_topy_bottomx(box):
     return [topx, topy, bottomx, bottomy]
 
 # Read recording
-
-
+import torch
+torch.cuda.empty_cache()
 
 half = False
 radar_d = '/radar_data'
 s = 0
 model, device, colors, names = init_yoloR(weights='yolor/yolor_p6.pt', cfg='yolor/cfg/yolor_p6.cfg',
-                                          names='yolor/data/coco.names', out='inference/output', imgsz=1280, half=False)
+                                          names='yolor/data/coco.names', out='inference/output', imgsz=1280, half=half)
 
 # adjust image visualization
 cv2.namedWindow("Camera")
@@ -66,9 +66,9 @@ for j, i in enumerate(bag.read_messages()):
     sensor = frame.load_data(i)
     # print(idx)
     # print(sensor)
-    if sensor == '/Radar':
-        file = open(f'label/{idx}.txt', 'w')
-        idx+=1
+    # if sensor == '/Radar':
+    #     file = open(f'label/{idx}.txt', 'w')
+    #     idx+=1
     if frame.full_data:
         print(abs(abs(frame.camera.message.header.stamp.to_sec()- frame.radar.message.header.stamp.to_sec())-1))
         # print(frame.camera.message.header.stamp.to_sec()- epoch)
@@ -100,11 +100,11 @@ for j, i in enumerate(bag.read_messages()):
                 cv2.rectangle(image_np_detection, box2d[0], box2d[1], (255, 255, 0))
                 box2d = [box2d[0][0], box2d[0][1], box2d[1][0], box2d[1][1]]
                 box2d = convert_topy_bottomx(box2d)
-                matched = find_gt(box2d, detection)
+                matched = find_gt(box2d, detection, image=image_np)
                 label = get_bbox_cls_label(cc, matched[0][1])
                 # bbframe.append(bbox)
-                file.write(' '.join([str(num) for num in label]))
-                file.write('\n')
+                # file.write(' '.join([str(num) for num in label]))
+                # file.write('\n')
                 # if matched[0]:
                     # mbox2s = convert_xyxy(matched[0][0])
                     # cv2.rectangle(image_np, mbox2s[0], mbox2s[1], (255, 255, 0))
@@ -115,7 +115,7 @@ for j, i in enumerate(bag.read_messages()):
         # cv2.waitKey(1)
         # idx+=1
         # frame.clear_data()
-        file.close()
+        # file.close()
 
 
 print(idx)

@@ -135,7 +135,7 @@ import pickle
 #         file.close()
 idx = 0
 finalx =np.empty([11])
-finaly =np.empty([5])
+finaly =np.empty([1])
 
 for idx in range(1348):
     with open(f'radar_data/{idx}.pkl', "rb") as file:
@@ -150,7 +150,7 @@ for idx in range(1348):
         continue
     file.close()
     x = np.empty([len(lines), 11]) #initialize inputs
-    y = np.empty([len(lines), 5])  #initialize labels
+    # y = np.empty([len(lines), 5])  #initialize labels
 
     for i in range(len(lines)):
         line = lines[i].split()
@@ -172,24 +172,37 @@ for idx in range(1348):
         finalx = np.vstack(([finalx,x[i]]))
 
         #label to one hot vector
+        # if(line[9] == 'car'):
+        #     y[i] = [1, 0, 0, 0, 0]
+        # elif(line[9] == 'bus'):
+        #     y[i] = [0, 1, 0, 0, 0]
+        # elif(line[9] == 'person'):
+        #     y[i] = [0, 0, 1, 0, 0]
+        # elif(line[9] == 'truck'):
+        #     y[i] = [0, 0, 0, 1, 0]
+        # elif (line[9] == 'no_match'):
+        #     y[i] = [0, 0, 0, 0, 1]
         if(line[9] == 'car'):
-            y[i] = [1, 0, 0, 0, 0]
+            y = [0]
         elif(line[9] == 'bus'):
-            y[i] = [0, 1, 0, 0, 0]
+            y = [1]
         elif(line[9] == 'person'):
-            y[i] = [0, 0, 1, 0, 0]
+            y = [2]
         elif(line[9] == 'truck'):
-            y[i] = [0, 0, 0, 1, 0]
+            y = [3]
         elif (line[9] == 'no_match'):
-            y[i] = [0, 0, 0, 0, 1]
-        finaly = np.vstack(([finaly, y[i]]))
+            y = [4]
+        finaly = np.vstack(([finaly, y]))
+
 
 finalx = finalx[1:]
 finaly = finaly[1:]
 
+with open(f'labelled_data/x.pkl', "wb") as file:
+    pickle.dump(finalx, file)
 
-
-
+with open(f'labelled_data/y.pkl', "wb") as file:
+    pickle.dump(finaly, file)
 
 
 

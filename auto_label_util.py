@@ -1,5 +1,5 @@
 import numpy as np
-
+import cv2
 
 def IOU(boxA, boxB):
     # determine the (x, y)-coordinates of the intersection rectangle
@@ -21,7 +21,7 @@ def IOU(boxA, boxB):
     return iou
 
 
-def find_gt(r_box, c_box):
+def find_gt(r_box, c_box, image=np.empty([])):
     """
     Parameters
     ----------
@@ -40,13 +40,33 @@ def find_gt(r_box, c_box):
     '''
     matched = [[], 'no_match', 0]
     max_iou = 0
-
+    w = 700
+    img = cv2.rectangle(image.copy(), (r_box[0], r_box[1]), (r_box[2], r_box[3]), (0, 255, 0), thickness=2)
+    cv2.putText(img, f'Radar Cluster', (r_box[0], r_box[1]),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5, (0, 255, 0), 1, cv2.LINE_AA)
     for i in c_box:
         box = [int(ii) for ii in i[0]]
         iou = IOU(r_box, box)
+        if image.any():
+            img1 = cv2.rectangle(img.copy(), (i[0][0], i[0][1]), (i[0][2], i[0][3]), (0, 0, 255), thickness=2)
+            cv2.putText(img1, f'YOLOR Detection: {i[1]} iou: {iou}', (i[0][0]-15, i[0][1]-15),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5, (0, 0, 255), 2, cv2.LINE_AA)
+            cv2.imshow('camera', img1)
+            cv2.waitKey(w)
+
         if iou > max_iou:
             matched = i
             max_iou = iou
+    print(matched)
+    if image.any() and matched[0]:
+        img1 = cv2.rectangle(img.copy(), (matched[0][0], matched[0][1]), (matched[0][2], matched[0][3]), (255, 255, 255), thickness=2)
+        cv2.putText(img1, f'Matched: {matched[1]}, iou: {max_iou}', (matched[0][0] - 15, matched[0][1] - 15),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5, (255, 255, 255), 2, cv2.LINE_AA)
+        cv2.imshow('camera', img1)
+        cv2.waitKey(w+1000)
     return matched, max_iou
 
 

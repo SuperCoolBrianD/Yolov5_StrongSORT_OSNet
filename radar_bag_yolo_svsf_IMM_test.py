@@ -4,10 +4,10 @@ sys.path.append('SVSF_Track')
 from radar_utils import *
 from yolor.detect_custom import init_yoloR, detect
 from SVSF_Track.MTT_Functions import *
-
+import pickle
 import rosbag
 from matplotlib.animation import FuncAnimation
-
+from learn_util import *
 # Read recording
 bag = rosbag.Bag("record/car.bag")
 # bag = rosbag.Bag("record/traffic3.bag")
@@ -167,6 +167,16 @@ cam_msg = 0
 # mtx = np.array([[234.45076996, 0., 334.1804498],
 #                 [0.,311.6748573,241.50825294],
 #                 [0., 0., 1.]])
+svm_model = pickle.load(open('svm_model.pkl', 'rb'))
+classes = ['car', 'bus', 'person', 'truck', 'no_match']
+rx = 1.56
+ry = 0
+rz = -.02
+tx = 0
+ty = 0
+tz = 0.1
+
+r2c = cam_radar(rx, ry, rz, tx, ty, tz, mtx)
 def animate(g):
     global image_np
     global framei
@@ -191,7 +201,7 @@ def animate(g):
     global mtx
     global roi
     global cam_msg
-
+    global model
     i = next(bg)
     # read ros Topic camera or radar
     if i.topic == '/usb_cam/image_raw/compressed' or i.topic == '/image_raw' or i.topic == '/Camera':
@@ -328,9 +338,9 @@ def animate(g):
                     axs.text(centroid[0], centroid[1] - 12, 'Prob: ' + f'{pCurrent:.2f}', fontsize=11,
                              color='r')
 
-                    #if latency >=0:
-                     #   axs.text(centroid[0], centroid[1] - 8, 'Latency: ' + f'{latency*Ts:.2f} s', fontsize=11,
-                      #           color='r')
+                    if latency >=0:
+                       axs.text(centroid[0], centroid[1] - 8, 'Latency: ' + f'{latency*Ts:.2f} s', fontsize=11,
+                                color='r')
 
             # plot and update all alive tracks
             for tk, j in enumerate(alive_track[:lastTrackIdx]):
@@ -345,19 +355,18 @@ def animate(g):
             print(cam_msg)
             print(f"dt = {i.message.header.stamp.to_sec() - cam_msg}")
             # yolo detection
-            cam1, detection = detect(source=cam1, model=model, device=device, colors=colors, names=names,
-                                         view_img=False)
+            # cam1, detection = detect(source=cam1, model=model, device=device, colors=colors, names=names,
+            #                              view_img=False)
             # Radar projection onto camera parameters
-            ry = 0
-            rz = .01
-            tx = 0.7
-            ty = 0.01
-            tz = 0
-            rx = 1.58
-            r2c = cam_radar(rx, ry, rz, tx, ty, tz, mtx)
+
             if cls:
                 for cc in cls:
                     bbox = get_bbox_cls(cc)
+                    features = np.array(get_features(cc, bbox))
+
+                    prediction = svm_model.predict(features.reshape(1, -1))
+                    # axs.text(bbox[0], bbox[1] - 2, 'SVM: ' + str(classes[int(prediction[0])]), fontsize=11,
+                    #          color='r')
                     # print(bbox)
                     bbox = get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], 0)
                     bbox = project_to_image(bbox, r2c)
@@ -365,9 +374,13 @@ def animate(g):
                     # print(pts)
                     box2d = get_bbox_2d(pts.T)
                     cv2.rectangle(cam1, box2d[0], box2d[1], (255,255,0))
+                    cv2.putText(cam1, f'SVM: {classes[int(prediction[0])]}', box2d[0],
+                                cv2.FONT_HERSHEY_SIMPLEX,
+                                1, (255, 255, 255), 2, cv2.LINE_AA)
+
                     # draw_projected_box3d(cam1, bbox)
-            img, cam_arr = render_radar_on_image(arr_all, cam1, r2c, 9000, 9000)
-            cv2.imshow('Camera', img)
+            # img, cam_arr = render_radar_on_image(arr_all, cam1, r2c, 9000, 9000)
+            cv2.imshow('Camera', cam1)
             cv2.waitKey(1)
             update = 1
         # print(f'Max dt = {max(dt_array)}')
