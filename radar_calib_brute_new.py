@@ -61,6 +61,9 @@ def not_found_button():
 def empty(v):
     pass
 
+
+
+
 cv2.setMouseCallback('Camera', get_img_local)
 fig = mlab.figure(size=(1000, 500), bgcolor=(0, 0, 0))
 calib_pts = []

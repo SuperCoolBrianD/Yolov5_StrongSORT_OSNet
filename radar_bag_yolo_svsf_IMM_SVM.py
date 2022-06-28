@@ -9,8 +9,6 @@ import rosbag
 from matplotlib.animation import FuncAnimation
 from learn_util import *
 from auto_label_util import *
-import time
-import open3d as o3d
 # Read recording
 bag = rosbag.Bag("record/car.bag")
 # bag = rosbag.Bag("record/traffic3.bag")
@@ -28,11 +26,9 @@ fig, axs = plt.subplots(1, figsize=(6, 6))
 fig.canvas.set_window_title('Radar Detection and Tracking IMM_small')
 # create generator object for recording
 bg = bag.read_messages()
-# plotting resolution
 s = 0
-half = False
 model, device, colors, names = init_yoloR(weights='yolor/yolor_p6.pt', cfg='yolor/cfg/yolor_p6.cfg',
-                                          names='yolor/data/coco.names', out='inference/output', imgsz=1280, half=False)
+                                           names='yolor/data/coco.names', out='inference/output', imgsz=1280)
 # adjust image visualization
 cv2.imshow('Camera', np.zeros((480, 640)))
 cv2.moveWindow('Camera', 800, 800)
@@ -228,8 +224,10 @@ def animate(g):
         radar_pc.astype('float32').tofile(f'label/radar/{idx}.bin')
         file = open(f'label/ground_truth/{idx}.txt', 'w')
         cv2.imwrite(f'label/camera/{idx}.png', image_np)
-
+        file.close()
         idx+=1
+        print(idx)
+        print(radar_pc.shape)
         # draw points on plt figure
         plt.cla()
         axs.set_xlim(-50, 100)
@@ -245,15 +243,13 @@ def animate(g):
         # Do pedestrian if required
         # ped_box, ped_cls = dbscan_cluster(pc, eps=2, min_sample=10)
 
-        measSet = np.empty((0, 11))
+        measSet = np.empty((0, 4))
         # KF tracking
 
         if cls:
             # convert clusters into tracking input format
             for ii in cls:
-                bbox = get_bbox_cls(ii)
-                x = np.hstack((np.mean(ii, axis=0), bbox))
-                measSet = np.vstack((measSet, x))
+                measSet = np.vstack((measSet, np.mean(ii, axis=0)))
             measSet = measSet.T[:2, :]
             # perform tracking
             trackList, unassignedMeas = gating(trackList, lastTrackIdx, PG, MP_IMM, maxVals, sensorPos, measSet)
@@ -277,11 +273,8 @@ def animate(g):
 
                 centroid = ii.xPost[:2]
                 speed = np.sqrt(ii.xPost[2]**2 + ii.xPost[3]**2)
-
                 latency = ii.latency
                 pCurrent = ii.pCurrent
-
-
                 status = ii.status
                 # if track has terminated remove from tracked objects
                 if ii.endSample:
@@ -307,7 +300,6 @@ def animate(g):
                     #             color='r')
 
             # plot and update all alive tracks
-
             for tk, j in enumerate(alive_track[:lastTrackIdx]):
                 if j:
                     tracked_object[tk].life -= 1
@@ -316,39 +308,37 @@ def animate(g):
                     axs.plot(x, y, mew=0)
                     if tracked_object[tk].life == 0:
                         alive_track.remove(tk)
+        print(cam_msg)
+        print(f"dt = {i.message.header.stamp.to_sec() - cam_msg}")
         # yolo detection
         # cam1, detection = detect(source=cam1, model=model, device=device, colors=colors, names=names,
         #                              view_img=False)
         # Radar projection onto camera parameters
-        ttt = time.time()
-        image_np_detection, detection = detect(source=image_np, model=model, device=device, colors=colors, names=names,
-                                 view_img=False, half=half)
+
         if cls:
             for cc in cls:
                 bbox = get_bbox_cls(cc)
+                # features = np.array(get_features(cc, bbox))
+                #
+                # prediction = svm_model.predict(features.reshape(1, -1))
+                # axs.text(bbox[0], bbox[1] - 2, 'SVM: ' + str(classes[int(prediction[0])]), fontsize=11,
+                #          color='r')
                 # print(bbox)
                 bbox = get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], 0)
                 bbox = project_to_image(bbox, r2c)
                 pts = project_to_image(cc.T, r2c)
                 # print(pts)
                 box2d = get_bbox_2d(pts.T)
-                draw_projected_box3d(image_np_detection, bbox)
-                cv2.rectangle(image_np_detection, box2d[0], box2d[1], (255, 255, 0))
-                cv2.rectangle(image_np_detection, box2d[0], box2d[1], (255, 255, 0))
-                box2d = [box2d[0][0], box2d[0][1], box2d[1][0], box2d[1][1]]
-                box2d = convert_topy_bottomx(box2d)
-                matched = find_gt(box2d, detection)
-                label = get_bbox_cls_label(cc, matched[0][1])
-                # bbframe.append(bbox)
-                file.write(' '.join([str(num) for num in label]))
-                file.write('\n')
+                cv2.rectangle(image_np, box2d[0], box2d[1], (255,255,0))
+                # cv2.putText(cam1, f'SVM: {classes[int(prediction[0])]}', box2d[0],
+                #             cv2.FONT_HERSHEY_SIMPLEX,
+                #             1, (255, 255, 255), 2, cv2.LINE_AA)
 
                 # draw_projected_box3d(cam1, bbox)
         # img, cam_arr = render_radar_on_image(arr_all, cam1, r2c, 9000, 9000)
-        # cv2.imshow('Camera', image_np)
-        # cv2.waitKey(1)
+        cv2.imshow('Camera', image_np)
+        cv2.waitKey(1)
         update = 1
-        file.close()
 
 
 
@@ -357,10 +347,54 @@ plt.show()
 
 
 """
-store all detected object in the previous frame
-iterate through all object in the previous frame
-if the object is tracked give it orientation
-rotate the object 
-find l w h 
+Key issue
+
+Uneven sampling time
+
+Track object where each frame might have multiple detections
+Track probability not is not decreasing
+Reason: clutters?, th
+Add Constant acceleration model
+Implement IMM for multi target
+
+If there is a object ID that is > the len of the object list
+    Append object
+    
+    
+check all alive track
+if no update -1 to life
+draw all track with life > 0
+Radar output:
+    xyz
+    radar power
+    range_rate (doppler): radial velocity 
+    
+DBSCAN Detection output
+    Centroid: center of the bounding box
+    Bounding box width length height (orientation)
+    average range_rate: average of xyz of the clusters
+    
+
+
+
+Tracking 
+    We try r, theta, v_r directly with EKF
+    Data association -> PDA
+    Filter -> SVSF
+        Input: x y
+        Input: r, theta, v_r
+        Measurement covariance
+        Previous cov
+        previous mode
+        --> IMM-SVSF-EKF
+            IMM three mode
+                constant velocity
+                constant acceleration
+                constant turn
+        Output
+        cov, state
+        
+        
+Bell camera
 
 """

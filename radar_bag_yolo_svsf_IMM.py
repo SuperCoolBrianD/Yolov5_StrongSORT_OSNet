@@ -11,7 +11,7 @@ import rosbag
 from matplotlib.animation import FuncAnimation
 
 # Read recording
-bag = rosbag.Bag("record/calib_high.bag")
+bag = rosbag.Bag("record/car.bag")
 # bag = rosbag.Bag("record/traffic3.bag")
 # bag = rosbag.Bag("record/traffic1.bag")
 topics = bag.get_type_and_topic_info()

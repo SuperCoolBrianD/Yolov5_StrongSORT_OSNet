@@ -323,6 +323,7 @@ def generateClutter(xLims,yLims,lambdaVal):
     
     return clutterMeas
 
+
 def gating(trackList,lastTrackIdx,PG, MP, maxVals,sensorPos,measSet):
     #takes the measurements obtained from the current time step or frame, then selects them based on the stochastic distance
     
@@ -349,6 +350,8 @@ def gating(trackList,lastTrackIdx,PG, MP, maxVals,sensorPos,measSet):
                 G_i= track_i.G
                 H = track_i.H
                 gateArr = gatingSingle(xPost_i,P_Post_i,G_i,H,Q_i,R,PG,Ts,modelType_i,sensorPos,sensor,measSet)
+
+
             else:
                 #if a IMM algorithm is being used
                 '''
@@ -366,17 +369,14 @@ def gating(trackList,lastTrackIdx,PG, MP, maxVals,sensorPos,measSet):
                 modeTrackList_i = track_i.modeTrackList #mode conditioned tracks of track i
                 gateArr, modeTrackList_i = gatingMM(modeTrackList_i,PG,sensorPos,measSet) #perform gating
                 track_i.modeTrackList = modeTrackList_i #store updated info for the mode-conditioned tracks
-            
             track_i.gateArr = gateArr #store gateArr as a property for track_i
             gateMat[i,:] = gateArr #store gateArr into the matrix
             trackList[i] = track_i #store the updated track into the trackList
         
     sumGateMat = np.sum(gateMat,axis=0) #take the sum of the matrix to see which measurments were not gated
     nonGatedIdx = np.nonzero(sumGateMat==0) #indices of measurements not gated
-    
     unassignedMeas = measSet[:,nonGatedIdx] #obtain the measurements not gated, also known as unassigned measurements
-    unassignedMeas = np.vstack((measSet[:,nonGatedIdx][0],measSet[:,nonGatedIdx][1]))
-    
+    unassignedMeas = np.vstack((measSet[:,nonGatedIdx][0], measSet[:,nonGatedIdx][1]))
     return trackList, unassignedMeas
 
 def gatingMM(modeTrackList,PG,sensorPos,measSet):
@@ -497,7 +497,7 @@ def initiateTracksMM(trackList,lastTrackIdx,measSet, maxVals,G_List,H,Q_List,R,m
             trackList[j] = trackMM_j #store track at position j in trackList
            
         lastTrackIdx = j #index of last track
-    return trackList,lastTrackIdx
+    return trackList, lastTrackIdx
 
 
 def updateStateTracks(trackList,lastTrackIdx, filterType,measSet, maxVals,lambdaVal,MP,PG,PD,sensorPos,SVSFParams,k):

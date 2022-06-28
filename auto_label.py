@@ -6,16 +6,7 @@ from yolor.detect_custom import init_yoloR, detect
 import rosbag
 from auto_label_util import *
 
-def convert_xyxy(box):
-    return (box[0], box[1]), (box[2], box[3])
 
-
-def convert_topy_bottomx(box):
-    topx = min(box[0], box[2])
-    topy = min(box[1], box[3])
-    bottomx = max(box[0], box[2])
-    bottomy = max(box[1], box[3])
-    return [topx, topy, bottomx, bottomy]
 
 # Read recording
 

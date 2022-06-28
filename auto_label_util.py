@@ -40,7 +40,8 @@ def find_gt(r_box, c_box, image=np.empty([])):
     '''
     matched = [[], 'no_match', 0]
     max_iou = 0
-    w = 700
+    w = 1
+    s = 1
     img = cv2.rectangle(image.copy(), (r_box[0], r_box[1]), (r_box[2], r_box[3]), (0, 255, 0), thickness=2)
     cv2.putText(img, f'Radar Cluster', (r_box[0], r_box[1]),
                 cv2.FONT_HERSHEY_SIMPLEX,
@@ -59,14 +60,38 @@ def find_gt(r_box, c_box, image=np.empty([])):
         if iou > max_iou:
             matched = i
             max_iou = iou
-    print(matched)
+
     if image.any() and matched[0]:
         img1 = cv2.rectangle(img.copy(), (matched[0][0], matched[0][1]), (matched[0][2], matched[0][3]), (255, 255, 255), thickness=2)
         cv2.putText(img1, f'Matched: {matched[1]}, iou: {max_iou}', (matched[0][0] - 15, matched[0][1] - 15),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.5, (255, 255, 255), 2, cv2.LINE_AA)
         cv2.imshow('camera', img1)
-        cv2.waitKey(w+1000)
+        cv2.waitKey(w+s)
     return matched, max_iou
 
 
+def np2bin(pc):
+    """Convert Numpy format pointcloud to KITTI style"""
+    x = pc[:, 0]
+    y = pc[:, 1]
+    z = pc[:, 2]
+    doppler = pc[:, 3]
+    arr = np.zeros(x.shape[0] + y.shape[0] + z.shape[0] + doppler.shape[0], dtype=np.float32)
+    arr[::4] = x
+    arr[1::4] = y
+    arr[2::4] = z
+    arr[3::4] = doppler
+    return arr
+
+
+def convert_xyxy(box):
+    return (box[0], box[1]), (box[2], box[3])
+
+
+def convert_topy_bottomx(box):
+    topx = min(box[0], box[2])
+    topy = min(box[1], box[3])
+    bottomx = max(box[0], box[2])
+    bottomy = max(box[1], box[3])
+    return [topx, topy, bottomx, bottomy]
