@@ -266,6 +266,18 @@ def animate(g):
             # initiate tracks for measurements that were not gated or in other words unassigned measurements
             trackList, lastTrackIdx = initiateTracksMM(trackList,lastTrackIdx, unassignedMeas, maxVals, G_List, H,
                                                        Q_List, R, models,filters, Ts, pInit, k, sensor, N)
+            """
+            each frame -> measSet [x, y] (change this in to x, y, length, width)
+            
+            tracklist
+            
+            a(x, y, l, w) b c d
+            
+            tracklist (trackobj1(x, y trackobj2 ....)
+            
+            unassignment measurement = [a, b]
+            gated measurement = [c, d]
+            """
 
             #input("")
             k += 1

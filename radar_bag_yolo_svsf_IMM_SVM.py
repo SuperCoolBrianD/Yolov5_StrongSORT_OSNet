@@ -2,7 +2,7 @@ import sys
 sys.path.append('yolor')
 sys.path.append('SVSF_Track')
 from radar_utils import *
-from yolor.detect_custom import init_yoloR, detect
+# from yolor.detect_custom import init_yoloR, detect
 from SVSF_Track.MTT_Functions import *
 import pickle
 import rosbag
@@ -10,7 +10,7 @@ from matplotlib.animation import FuncAnimation
 from learn_util import *
 from auto_label_util import *
 # Read recording
-bag = rosbag.Bag("record/car.bag")
+bag = rosbag.Bag("record/tripod.bag")
 # bag = rosbag.Bag("record/traffic3.bag")
 # bag = rosbag.Bag("record/traffic1.bag")
 topics = bag.get_type_and_topic_info()
@@ -27,8 +27,8 @@ fig.canvas.set_window_title('Radar Detection and Tracking IMM_small')
 # create generator object for recording
 bg = bag.read_messages()
 s = 0
-model, device, colors, names = init_yoloR(weights='yolor/yolor_p6.pt', cfg='yolor/cfg/yolor_p6.cfg',
-                                           names='yolor/data/coco.names', out='inference/output', imgsz=1280)
+# model, device, colors, names = init_yoloR(weights='yolor/yolor_p6.pt', cfg='yolor/cfg/yolor_p6.cfg',
+#                                            names='yolor/data/coco.names', out='inference/output', imgsz=1280)
 # adjust image visualization
 cv2.imshow('Camera', np.zeros((480, 640)))
 cv2.moveWindow('Camera', 800, 800)
@@ -179,6 +179,7 @@ tz = 0.1
 r2c = cam_radar(rx, ry, rz, tx, ty, tz, mtx)
 frame = SRS_data_frame()
 idx=0
+epoch = 0
 
 def animate(g):
     global image_np
@@ -206,6 +207,7 @@ def animate(g):
     global cam_msg
     global model
     global idx
+    global epoch
     i = next(bg)
 
     # read ros Topic camera or radar
@@ -216,18 +218,15 @@ def animate(g):
 
     if frame.full_data:
         # print(abs(abs(frame.camera.message.header.stamp.to_sec() - frame.radar.message.header.stamp.to_sec()) - 1))
-        # print(frame.camera.message.header.stamp.to_sec()- epoch)
+        # print(frame.camera.message.header.stamp.to_sec() - frame.radar.message.header.stamp.to_sec())
+        print(frame.radar.message.header.stamp.to_sec())
+        # print(frame.radar.message.header.stamp.to_sec()- epoch)
+        # epoch = frame.radar.message.header.stamp.to_sec()
+
         image_np = imgmsg_to_cv2(frame.camera.message)
         npts = frame.radar.message.width
         arr_all = pc2_numpy(frame.radar.message, npts)
-        radar_pc = np2bin(arr_all)
-        radar_pc.astype('float32').tofile(f'label/radar/{idx}.bin')
-        file = open(f'label/ground_truth/{idx}.txt', 'w')
-        cv2.imwrite(f'label/camera/{idx}.png', image_np)
-        file.close()
         idx+=1
-        print(idx)
-        print(radar_pc.shape)
         # draw points on plt figure
         plt.cla()
         axs.set_xlim(-50, 100)
@@ -288,12 +287,12 @@ def animate(g):
                 # update if in tracked objects
                 elif jj in tracked_object.keys() and tracked_object[jj]:
                     tracked_object[jj].upd((centroid[0], centroid[1]))
-                    axs.text(centroid[0], centroid[1] - 2, 'ID: ' + str(jj), fontsize=11,
-                             color='r')
-                    axs.text(centroid[0], centroid[1] - 5, 'Speed: ' + f'{speed*3.6:.2f} km/h', fontsize=11,
-                             color='r')
-                    axs.text(centroid[0], centroid[1] - 12, 'Prob: ' + f'{pCurrent:.2f}', fontsize=11,
-                             color='r')
+                    # axs.text(centroid[0], centroid[1] - 2, 'ID: ' + str(jj), fontsize=11,
+                    #          color='r')
+                    # axs.text(centroid[0], centroid[1] - 5, 'Speed: ' + f'{speed*3.6:.2f} km/h', fontsize=11,
+                    #          color='r')
+                    # axs.text(centroid[0], centroid[1] - 12, 'Prob: ' + f'{pCurrent:.2f}', fontsize=11,
+                    #          color='r')
 
                     # if latency >=0:
                     #    axs.text(centroid[0], centroid[1] - 8, 'Latency: ' + f'{latency*Ts:.2f} s', fontsize=11,
@@ -318,11 +317,11 @@ def animate(g):
         if cls:
             for cc in cls:
                 bbox = get_bbox_cls(cc)
-                # features = np.array(get_features(cc, bbox))
-                #
-                # prediction = svm_model.predict(features.reshape(1, -1))
-                # axs.text(bbox[0], bbox[1] - 2, 'SVM: ' + str(classes[int(prediction[0])]), fontsize=11,
-                #          color='r')
+                features = np.array(get_features(cc, bbox))
+
+                prediction = svm_model.predict(features.reshape(1, -1))
+                axs.text(bbox[0], bbox[1] - 2, 'SVM: ' + str(classes[int(prediction[0])]), fontsize=11,
+                         color='r')
                 # print(bbox)
                 bbox = get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], 0)
                 bbox = project_to_image(bbox, r2c)
@@ -335,7 +334,7 @@ def animate(g):
                 #             1, (255, 255, 255), 2, cv2.LINE_AA)
 
                 # draw_projected_box3d(cam1, bbox)
-        # img, cam_arr = render_radar_on_image(arr_all, cam1, r2c, 9000, 9000)
+        image_np, cam_arr = render_radar_on_image(arr_all, image_np, r2c, 9000, 9000)
         cv2.imshow('Camera', image_np)
         cv2.waitKey(1)
         update = 1

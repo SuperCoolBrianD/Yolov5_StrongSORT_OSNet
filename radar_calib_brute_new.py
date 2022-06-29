@@ -15,7 +15,7 @@ from vis_util import *
 
 
 # Read recording
-bag = rosbag.Bag("record/synch_1.bag")
+bag = rosbag.Bag("record/tripod.bag")
 # bag = rosbag.Bag("record/traffic1.bag")
 topics = bag.get_type_and_topic_info()
 
