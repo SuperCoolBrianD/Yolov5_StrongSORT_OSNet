@@ -12,10 +12,10 @@ from projectutils import draw_radar
 import rosbag
 from matplotlib.animation import FuncAnimation
 from vis_util import *
-
+from mpl_point_clicker import clicker
 
 # Read recording
-bag = rosbag.Bag("record/car.bag")
+bag = rosbag.Bag("record/tripod.bag")
 # bag = rosbag.Bag("record/traffic1.bag")
 topics = bag.get_type_and_topic_info()
 
@@ -92,6 +92,9 @@ cv2.setTrackbarPos('tx', 'TrackBar', 57,)
 cv2.setTrackbarPos('ty', 'TrackBar', 50,)
 cv2.setTrackbarPos('tz', 'TrackBar', 50,)
 frame = SRS_data_frame()
+p_arr_all = np.array([[0, 0, 0, 0, 0]])
+figs, axs = plt.subplots(1, figsize=(6, 6))
+klicker = clicker(axs, ["event"], markers=["x"], **{"linestyle": "--"})
 for j, i in enumerate(bag.read_messages()):
     sensor = frame.load_data(i)
 
@@ -108,13 +111,12 @@ for j, i in enumerate(bag.read_messages()):
         image_np = imgmsg_to_cv2(frame.camera.message)
         npts = frame.radar.message.width
         arr_all = pc2_numpy(frame.radar.message, npts)
-        print(np.max(arr_all[:, 0]))
-        print(np.max(arr_all[:, 1]))
-        print(np.max(arr_all[:, 2]))
-        print(np.min(arr_all[:, 0]))
-        print(np.min(arr_all[:, 1]))
-        print(np.min(arr_all[:, 2]))
-
+        axs.set_xlim(-50, 100)
+        axs.set_ylim(-50, 100)
+        axs.scatter(arr_all[:, 0], arr_all[:, 1], s=0.5)
+        plt.show()
+        print(klicker.get_positions())
+        input()
         arr = filter_zero(arr_all)
         # draw points on plt figure
         pc = arr[:, :4]
@@ -138,7 +140,8 @@ for j, i in enumerate(bag.read_messages()):
 
         if cls:
             for cc in cls:
-                draw_radar(arr_all, fig=fig, pts_scale=0.1, pts_color=(1, 1, 1), view=v)
+                draw_radar(arr_all, fig=fig, pts_scale=0.4, pts_color=(1, 1, 1), view=v)
+                draw_radar(p_arr_all, fig=fig, pts_scale=0.4, pts_color=(1, 0, 1), view=v)
                 bbox = get_bbox_cls(cc)
                 bbox = get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], 0)
                 draw_gt_boxes3d(bbox, fig=fig)
@@ -152,10 +155,6 @@ for j, i in enumerate(bag.read_messages()):
                 ty = cv2.getTrackbarPos('ty', 'TrackBar') / 10 - 5
                 tz = cv2.getTrackbarPos('tz', 'TrackBar') / 10 - 5
                 r2c = cam_radar(rx, ry, rz, tx, ty, tz, mtx)
-
-                # extrinsic radar -> pixel coordinate
-                # radar -> camera coordinate
-                # radar_cam_coord -> rotx(alpha) * radar_cam_coord -> world coordinate with origin at radar (pitch about 5 degree)
                 new_cam1, cam_arr = render_radar_on_image(arr, image_np, r2c, 9000, 9000)
                 for cc in cls:
                     bbox = get_bbox_cls(cc)
@@ -172,9 +171,9 @@ for j, i in enumerate(bag.read_messages()):
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord('c'):
                     break
-            # v = mlab.view()
-            # mlab.clf()
+            v = mlab.view()
+            mlab.clf()
         print(rx, ry, rz, tx, ty, tz)
         print('next frame')
-
+        p_arr_all = arr_all.copy()
         update = 1

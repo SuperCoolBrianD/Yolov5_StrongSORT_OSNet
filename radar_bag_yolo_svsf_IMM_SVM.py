@@ -169,12 +169,12 @@ cam_msg = 0
 #                 [0., 0., 1.]])
 svm_model = pickle.load(open('svm_model.pkl', 'rb'))
 classes = ['car', 'bus', 'person', 'truck', 'no_match']
-rx = 1.56
+rx = 1.6
 ry = 0
-rz = -.02
-tx = 0
+rz = .04
+tx = 0.7
 ty = 0
-tz = 0.1
+tz = 0
 
 r2c = cam_radar(rx, ry, rz, tx, ty, tz, mtx)
 frame = SRS_data_frame()
@@ -229,16 +229,17 @@ def animate(g):
         idx+=1
         # draw points on plt figure
         plt.cla()
-        axs.set_xlim(-50, 100)
-        axs.set_ylim(-50, 100)
+        axs.set_xlim(-50, 150)
+        axs.set_ylim(-50, 150)
         arr = filter_zero(arr_all)
-        axs.scatter(arr[:, 0], arr[:, 1], s=0.5)
+        axs.scatter(arr_all[:, 0], arr_all[:, 1], s=0.5)
         # draw points on plt figure
 
         pc = arr[:, :4]
         ped_box = np.empty((0, 5))
         # Perform class specific DBSCAN
         total_box, cls = dbscan_cluster(pc, eps=3, min_sample=15, axs=axs)
+
         # Do pedestrian if required
         # ped_box, ped_cls = dbscan_cluster(pc, eps=2, min_sample=10)
 
@@ -313,27 +314,38 @@ def animate(g):
         # cam1, detection = detect(source=cam1, model=model, device=device, colors=colors, names=names,
         #                              view_img=False)
         # Radar projection onto camera parameters
-
+        features = np.empty((0, 11))
+        box2ds = []
         if cls:
             for cc in cls:
                 bbox = get_bbox_cls(cc)
-                features = np.array(get_features(cc, bbox))
-
-                prediction = svm_model.predict(features.reshape(1, -1))
-                axs.text(bbox[0], bbox[1] - 2, 'SVM: ' + str(classes[int(prediction[0])]), fontsize=11,
-                         color='r')
+                features = np.vstack((features, np.array(get_features(cc, bbox))))
+                # axs.text(bbox[0], bbox[1] - 2, 'SVM: ' + str(classes[int(prediction[0])]), fontsize=11,
+                #          color='r')
                 # print(bbox)
                 bbox = get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], 0)
                 bbox = project_to_image(bbox, r2c)
                 pts = project_to_image(cc.T, r2c)
                 # print(pts)
                 box2d = get_bbox_2d(pts.T)
+                box2ds.append(box2d)
                 cv2.rectangle(image_np, box2d[0], box2d[1], (255,255,0))
                 # cv2.putText(cam1, f'SVM: {classes[int(prediction[0])]}', box2d[0],
                 #             cv2.FONT_HERSHEY_SIMPLEX,
                 #             1, (255, 255, 255), 2, cv2.LINE_AA)
 
                 # draw_projected_box3d(cam1, bbox)
+            prediction = svm_model.predict(features)
+            for ii, cc in enumerate(cls):
+                pd = prediction[ii]
+                bbox = get_bbox_cls(cc)
+                box2d = box2ds[ii]
+                axs.text(bbox[0], bbox[1] - 2, 'SVM: ' + str(classes[int(pd)]), fontsize=11,
+                         color='r')
+                cv2.putText(cam1, f'SVM: {classes[int(pd)]}', box2d[0],
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            1, (255, 255, 255), 2, cv2.LINE_AA)
+            print(prediction)
         image_np, cam_arr = render_radar_on_image(arr_all, image_np, r2c, 9000, 9000)
         cv2.imshow('Camera', image_np)
         cv2.waitKey(1)

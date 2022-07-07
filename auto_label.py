@@ -1,3 +1,5 @@
+import os
+
 from radar_utils import *
 import sys
 sys.path.append('yolor')
@@ -5,7 +7,7 @@ sys.path.append('SVSF_Track')
 from yolor.detect_custom import init_yoloR, detect
 import rosbag
 from auto_label_util import *
-
+import pickle
 
 
 # Read recording
@@ -58,14 +60,17 @@ for j, i in enumerate(bag.read_messages()):
     # print(idx)
     # print(sensor)
     if sensor == '/Radar':
-        file = open(f'label/{idx}.txt', 'w')
+        os.makedirs(f'dataset/{idx:05d}')
+        file = open(f'dataset/{idx:05d}/ground_truth.txt', 'w')
         idx+=1
     if frame.full_data:
         print(abs(abs(frame.camera.message.header.stamp.to_sec()- frame.radar.message.header.stamp.to_sec())-1))
         # print(frame.camera.message.header.stamp.to_sec()- epoch)
         image_np = imgmsg_to_cv2(frame.camera.message)
+        cv2.imwrite(f'dataset/{idx-1:05d}/camera.png', image_np)
         npts = frame.radar.message.width
         arr_all = pc2_numpy(frame.radar.message, npts)
+        pickle.dump(arr_all, open(f"dataset/{idx-1:05d}/radar.pkl", 'wb'))
         # draw points on plt figure
         arr = filter_zero(arr_all)
         total_box, cls = dbscan_cluster(arr, eps=2, min_sample=20)
@@ -73,9 +78,6 @@ for j, i in enumerate(bag.read_messages()):
                                  view_img=False, half=half)
 
         image_np_detection, cam_arr = render_radar_on_image(arr_all, image_np_detection, r2c, 9000, 9000)
-        # with open(f'label/{idx}.txt', 'w') as file:
-        # file.write(f'{frame.radar.message.header.stamp.to_sec()}')
-        # file.write('\n')
         if cls:
             for cc in cls:
                 bbox = get_bbox_cls(cc)
@@ -97,10 +99,10 @@ for j, i in enumerate(bag.read_messages()):
                 file.write(' '.join([str(num) for num in label]))
                 file.write('\n')
                 # if matched[0]:
-                    # mbox2s = convert_xyxy(matched[0][0])
-                    # cv2.rectangle(image_np, mbox2s[0], mbox2s[1], (255, 255, 0))
-                    # cv2.imshow('no detection', image_np)
-                    # cv2.waitKey(100)
+                #     mbox2s = convert_xyxy(matched[0][0])
+                #     cv2.rectangle(image_np, mbox2s[0], mbox2s[1], (255, 255, 0))
+                #     cv2.imshow('no detection', image_np)
+                #     cv2.waitKey(100)
         # cv2.imshow('detection', image_np_detection)
         # cv2.imshow('no detection', image_np)
         # cv2.waitKey(1)

@@ -42,10 +42,11 @@ def find_gt(r_box, c_box, image=np.empty([])):
     max_iou = 0
     w = 1
     s = 1
-    img = cv2.rectangle(image.copy(), (r_box[0], r_box[1]), (r_box[2], r_box[3]), (0, 255, 0), thickness=2)
-    cv2.putText(img, f'Radar Cluster', (r_box[0], r_box[1]),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.5, (0, 255, 0), 1, cv2.LINE_AA)
+    if image.any():
+        img = cv2.rectangle(image.copy(), (r_box[0], r_box[1]), (r_box[2], r_box[3]), (0, 255, 0), thickness=2)
+        cv2.putText(img, f'Radar Cluster', (r_box[0], r_box[1]),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5, (0, 255, 0), 1, cv2.LINE_AA)
     for i in c_box:
         box = [int(ii) for ii in i[0]]
         iou = IOU(r_box, box)

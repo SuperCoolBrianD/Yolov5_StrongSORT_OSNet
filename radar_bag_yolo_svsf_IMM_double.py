@@ -16,7 +16,7 @@ bag = rosbag.Bag("record/tripod.bag")
 # bag = rosbag.Bag("record/traffic3.bag")
 # bag = rosbag.Bag("record/traffic1.bag")
 topics = bag.get_type_and_topic_info()
-from dbscan import DBSCAN
+
 # old SORT tracker
 # mot_tracker = sort.Sort(min_hits=2, max_age=8, iou_threshold=0.1)
 
@@ -193,53 +193,6 @@ hull = np.array([[-18.06451613,  17.53246753],
        [ -1.61290323,  -1.94805195],
         [-18.06451613,  17.53246753]])
 p_radar = np.empty((0, 5))
-
-
-
-def dbscan_cluster(pc, eps=3, min_sample=25, axs=None):
-    """
-    clustering algorithm
-    pc: radar point cloud (Nx5)
-    eps: dbscan parameter for closeness to be considered as neighbour
-    min_sample: minimum sample to be considered as neighbourhood
-    axs: plotting parameter set to None if no required
-    """
-
-    total_box = np.empty((0, 5))
-    # if empty return None
-    if not pc.any():
-        return total_box, None
-    # Init DBSCAN algorithm
-    clustering = DBSCAN(eps=eps, min_samples=min_sample)
-    # cluster pc
-    mpc = pc[:, :4]
-    # mpc = StandardScaler().fit_transform(mpc)
-    clustering.fit(mpc)
-
-    # generate cluster label for each point
-    label = clustering.labels_
-    # filter cluster by label from DBSCAN
-    cls = set_cluster(pc, label)
-    for i, c in enumerate(cls):
-        # get 2D bbox of cluster
-        bbox, box = get_bbox(c)
-        box[0, -1] = i
-        if total_box.size == 0:
-            total_box = box
-        else:
-            total_box = np.vstack((total_box, box))
-        # if axs:
-        #     axs.scatter(c[:, 0], c[:, 1], s=0.5)
-        #     rect = patches.Rectangle((bbox[0], bbox[1]), bbox[2], bbox[3], linewidth=1, edgecolor='blue',
-        #                              facecolor='none')
-        #     axs.add_patch(rect)
-        #     # axs.text(c[0, 0], c[0, 1], f"cluster {i}", fontsize=11,
-        #     # color='r')
-        #     # axs.text(c[0, 0], c[0, 1]-5, f"{c.shape[0]} points", fontsize=11,
-        #     # color='b')
-    return total_box, cls
-
-
 
 def animate(g):
     global image_np
