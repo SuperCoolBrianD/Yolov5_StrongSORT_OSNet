@@ -190,8 +190,6 @@ epoch = 0
 cluster_hist = [[] for i in range(8000)]
 class_track = [[] for i in range(8000)]
 tracked_list = [TrackedObject() for i in range(8000)]
-
-print(cluster_hist)
 bus_count = 0
 person_count = 0
 car_count = 0
@@ -219,7 +217,7 @@ hull = np.array([[-18.06451613,  17.53246753],
         [-18.06451613,  17.53246753]])
 
 p_radar = np.empty((0, 5))
-
+rd = 0
 def animate(g):
     global image_np
     global framei
@@ -253,16 +251,21 @@ def animate(g):
     global truck_count
     global hull
     global camera_detection
+    global rd
     if idx <= 0:
         i = next(bg)
         # read ros Topic camera or radar
         idx+=1
     else:
         i = next(bg)
+        if camera_detection:
+            sensor = frame.load_data(i)
+        else:
+            sensor = frame.load_data_radar_only(i)
 
-        sensor = frame.load_data(i)
         if frame.full_data:
-            # print(abs(abs(frame.camera.message.header.stamp.to_sec() - frame.radar.message.header.stamp.to_sec()) - 1))
+            print(abs(abs(rd- frame.radar.message.header.stamp.to_sec())))
+            rd = frame.radar.message.header.stamp.to_sec()
             # print(frame.camera.message.header.stamp.to_sec() - frame.radar.message.header.stamp.to_sec())
             # print(frame.radar.message.header.stamp.to_sec())
             # print(frame.radar.message.header.stamp.to_sec()- epoch)
@@ -400,8 +403,8 @@ def animate(g):
                     else:
                         if tracked_list[jj]:
                             radar_label, radar_centroid = tracked_list[jj].get_prediction(camera=camera_detection)
-                            print([radar_label])
-                            print([radar_centroid])
+                            # print([radar_label])
+                            # print([radar_centroid])
                             tracked_list[jj] = None
 
                         # if cluster_hist[jj]:

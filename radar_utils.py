@@ -387,6 +387,20 @@ class SRS_data_frame:
             self.camera_frame+=1
         if self.has_radar and self.has_camera:
             self.full_data = True
+
+    def load_data_radar_only(self, data):
+        # if self.full_data:
+        #     self.clear_data()
+        if data.topic == '/Radar':
+            self.radar = data
+            self.has_radar = True
+            self.radar_frame += 1
+        elif data.topic == '/Camera':
+            self.camera = data
+            self.has_camera = True
+            self.camera_frame += 1
+        if self.has_radar and self.has_camera:
+            self.full_data = True
         return data.topic
 
     def clear_data(self):
@@ -423,7 +437,6 @@ class TrackedObject:
             # print(i)
             radar_label = np.vstack((radar_label, i))
         c = [i.centroid for i in self.dets]
-        print(c)
         centroid = np.empty((0, 4))
         for i in c:
             centroid = np.vstack((centroid, i))
