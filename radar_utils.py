@@ -317,8 +317,8 @@ def dbscan_cluster(pc, eps=3, min_sample=25, axs=None):
         #     rect = patches.Rectangle((bbox[0], bbox[1]), bbox[2], bbox[3], linewidth=1, edgecolor='blue',
         #                              facecolor='none')
         #     axs.add_patch(rect)
-        #     # axs.text(c[0, 0], c[0, 1], f"cluster {i}", fontsize=11,
-        #     # color='r')
+            # axs.text(c[0, 0], c[0, 1], f"cluster {i}", fontsize=11,
+            # color='r')
         #     # axs.text(c[0, 0], c[0, 1]-5, f"{c.shape[0]} points", fontsize=11,
         #     # color='b')
     return total_box, cls

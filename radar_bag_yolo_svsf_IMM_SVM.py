@@ -292,7 +292,7 @@ def animate(g):
             axs.set_xlim(-50, 100)
             axs.set_ylim(-50, 100)
             # arr = filter_zero(arr_all)
-            # axs.scatter(arr[:, 0], arr[:, 1], s=0.5)
+            axs.scatter(arr[:, 0], arr[:, 1], s=0.5)
             # draw points on plt figure
 
             pc = arr[:, :4]
@@ -304,8 +304,8 @@ def animate(g):
             cls.extend(cls_1)
             cls = [cls[ii] for ii in box_index]
             total_box = total_box[box_index, :]
-            # for ii, jj in enumerate(cls):
-            #     plot_box(total_box[ii, :], jj, axs)
+            for ii, jj in enumerate(cls):
+                plot_box(total_box[ii, :], jj, axs)
 
             measSet = np.empty((0, 4))
             # KF tracking
@@ -468,10 +468,10 @@ def animate(g):
             #                              view_img=False)
             # Radar projection onto camera parameters
 
-            axs.text(0, 60, f'Car_Count {car_count}', fontsize=11, color='b')
-            axs.text(0, 70, f'Bus_Count {bus_count}', fontsize=11, color='b')
-            axs.text(0, 80, f'Person_Count {person_count}', fontsize=11, color='b')
-            axs.text(0, 90, f'Truck_Count {truck_count}', fontsize=11, color='b')
+            # axs.text(0, 60, f'Car_Count {car_count}', fontsize=11, color='b')
+            # axs.text(0, 70, f'Bus_Count {bus_count}', fontsize=11, color='b')
+            # axs.text(0, 80, f'Person_Count {person_count}', fontsize=11, color='b')
+            # axs.text(0, 90, f'Truck_Count {truck_count}', fontsize=11, color='b')
             # for c in cluster_hist[0]:
             #     # print(c)
             #     axs.scatter(c[0][:, 0], c[0][:, 1], s=0.5)
