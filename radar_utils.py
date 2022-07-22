@@ -233,6 +233,19 @@ def get_bbox_cls_label(arr, clf):
 
 
 
+def get_bbox_cls_label_kitti(arr, clf, box2d):
+    x_coord, y_coord, z_coord = arr[:, 0], arr[:, 1], arr[:, 2]
+    x_min = min(x_coord)
+    x_max = max(x_coord)
+    y_min = min(y_coord)
+    y_max = max(y_coord)
+    z_min = min(z_coord)
+    z_max = max(z_coord)
+    return [clf,0, 0, 0, box2d[0], box2d[1], box2d[2], box2d[3],
+                      x_max-x_min, y_max-y_min, z_max-z_min, x_min+(x_max-x_min)/2, y_min+(y_max-y_min)/2, z_min+(z_max-z_min)/2, 0, 0]
+
+
+
 def get_bbox_coord(t1, t2, t3, w, h, l, rz, is_homogenous=False):
     # 3d bounding box dimensions
 
@@ -382,6 +395,40 @@ class SRS_data_frame:
         self.has_radar = False
         self.has_camera = False
         self.full_data = False
+
+
+class DetectedObject:
+    def __init__(self, cls):
+        self.cls = cls
+        self.cam_label = None
+        self.cam_rad_iou = None
+        self.rad_label = None
+        self.rad_box = None
+        self.cam_box = None
+        self.rad_box_cam_coord = None
+        self.centroid = np.empty((0, 4))
+
+
+class TrackedObject:
+    def __init__(self):
+        self.dets=[]
+
+    def get_prediction(self):
+        cam_label = [i.cam_label for i in self.dets]
+        r = [i.rad_label for i in self.dets]
+        radar_label = np.empty((0, 4))
+        for i in r:
+            # print(i)
+            radar_label = np.vstack((radar_label, i))
+        c = [i.centroid for i in self.dets]
+        print(c)
+        centroid = np.empty((0, 4))
+        for i in c:
+            centroid = np.vstack((centroid, i))
+        cam_box = [i.cam_box for i in self.dets]
+        return radar_label, centroid
+
+
 
 
 def timestamp_sync(imgs, t):

@@ -12,7 +12,7 @@ from auto_label_util import *
 import time
 import open3d as o3d
 # Read recording
-bag = rosbag.Bag("record/tripod.bag")
+bag = rosbag.Bag("record/car.bag")
 # bag = rosbag.Bag("record/traffic3.bag")
 # bag = rosbag.Bag("record/traffic1.bag")
 topics = bag.get_type_and_topic_info()
@@ -185,14 +185,18 @@ frame = SRS_data_frame()
 idx=0
 
 
-hull = np.array([[-18.06451613,  17.53246753],
-       [ 53.87096774, 114.93506494],
-       [ 63.87096774, 102.81385281],
-       [ 14.51612903,  27.92207792],
-       [ 10.96774194,   9.74025974],
-       [ -1.61290323,  -1.94805195],
-        [-18.06451613,  17.53246753]])
-p_radar = np.empty((0, 5))
+# hull = np.array([[-18.06451613,  17.53246753],
+#        [ 53.87096774, 114.93506494],
+#        [ 63.87096774, 102.81385281],
+#        [ 14.51612903,  27.92207792],
+#        [ 10.96774194,   9.74025974],
+#        [ -1.61290323,  -1.94805195],
+#         [-18.06451613,  17.53246753]])
+hull = np.array([[-18.06451613,  13.63636364],
+       [ 48.06451613,  81.6017316 ],
+       [ 59.03225806,  69.04761905],
+       [ -7.74193548,  -1.51515152]])
+# p_radar = np.empty((0, 5))
 
 
 
@@ -286,10 +290,10 @@ def animate(g):
         npts = frame.radar.message.width
         arr_all = pc2_numpy(frame.radar.message, npts)
         axs.scatter(arr_all[:, 0], arr_all[:, 1], s=0.5, c='red')
-        arr_concat = np.vstack((arr_all, p_radar))
+        # arr_concat = np.vstack((arr_all, p_radar))
         path = mpltPath.Path(hull)
-        mask = path.contains_points(arr_concat[:, :2])
-        arr = arr_concat[mask]
+        mask = path.contains_points(arr_all[:, :2])
+        arr = arr_all[mask]
         idx+=1
         # draw points on plt figure
         axs.set_xlim(-50, 100)

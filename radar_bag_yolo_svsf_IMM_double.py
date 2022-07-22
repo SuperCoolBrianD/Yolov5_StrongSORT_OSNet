@@ -117,9 +117,13 @@ delConfThr = 0.05 # threshold for deleting a confirmed track
 
 #IMM parameters
 models = ["CV", 'CA']
+# models = ["CV"]
 filters = ['IPDAKF', 'IPDAKF']
-G_List = [G_CV, G_CT] #input gain list
-Q_List = [Q_CV, Q_CT] #process noise co-variance list
+# filters = ['IPDAKF']
+G_List = [G_CV, G_CA] #input gain list
+Q_List = [Q_CV, Q_CA] #process noise co-variance list
+# G_List = [G_CV] #input gain list
+# Q_List = [Q_CV, Q_CT] #process noise co-variance list
 #pInits = [.2,.2] #initial track existence probabilities
 #uVec0 = [.5, .5] #initial mode probabilities
 r = len(models)

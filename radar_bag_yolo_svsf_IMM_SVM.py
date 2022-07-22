@@ -2,13 +2,14 @@ import sys
 sys.path.append('yolor')
 sys.path.append('SVSF_Track')
 from radar_utils import *
-# from yolor.detect_custom import init_yoloR, detect
+from yolor.detect_custom import init_yoloR, detect
 from SVSF_Track.MTT_Functions import *
 import pickle
 import rosbag
 from matplotlib.animation import FuncAnimation
 from learn_util import *
 from auto_label_util import *
+import time
 # Read recording
 bag = rosbag.Bag("record/tripod.bag")
 # bag = rosbag.Bag("record/traffic3.bag")
@@ -27,8 +28,8 @@ fig.canvas.set_window_title('Radar Detection and Tracking IMM_small')
 # create generator object for recording
 bg = bag.read_messages()
 s = 0
-# model, device, colors, names = init_yoloR(weights='yolor/yolor_p6.pt', cfg='yolor/cfg/yolor_p6.cfg',
-#                                            names='yolor/data/coco.names', out='inference/output', imgsz=1280)
+model, device, colors, names = init_yoloR(weights='yolor/yolor_p6.pt', cfg='yolor/cfg/yolor_p6.cfg',
+                                           names='yolor/data/coco.names', out='inference/output', imgsz=1280, half=True)
 # adjust image visualization
 cv2.imshow('Camera', np.zeros((480, 640)))
 cv2.moveWindow('Camera', 800, 800)
@@ -49,7 +50,7 @@ lastTrackIdx = -1  # index of a track in the list,
 # init KF tracker
 
 
-Ts = .12 #sampling time
+Ts = .05 # sampling time
 unassignedMeas0 = np.array([[]])
 
 modelType = 'CV' #model used for single model filters
@@ -108,14 +109,16 @@ PG = .99999 #gate probability
 lambdaVal = 0.05 # parameter for clutter density
 
 delTenThr = .05 #threshold for deleting a tenative track
-confTenThr = .6 # threshold for confirming a tenative track
+confTenThr = .6 # threshold for confirming a tenative track/
 delConfThr = 0.05 # threshold for deleting a confirmed track
 
 #IMM parameters
 models = ["CV", 'CA']
+# models = ["CV"]
 filters = ['IPDAKF', 'IPDAKF']
-G_List = [G_CV, G_CT] #input gain list
-Q_List = [Q_CV, Q_CT] #process noise co-variance list
+# filters = ['IPDAKF']
+G_List = [G_CV, G_CA] #input gain list
+Q_List = [Q_CV, Q_CA] #process noise co-variance list
 #pInits = [.2,.2] #initial track existence probabilities
 #uVec0 = [.5, .5] #initial mode probabilities
 r = len(models)
@@ -167,8 +170,10 @@ cam_msg = 0
 # mtx = np.array([[234.45076996, 0., 334.1804498],
 #                 [0.,311.6748573,241.50825294],
 #                 [0., 0., 1.]])
-svm_model = pickle.load(open('svm_model.pkl', 'rb'))
+svm_model = pickle.load(open('svm_model_scale.pkl', 'rb'))
+scaler_model = pickle.load(open('scaler_model.pkl', 'rb'))
 classes = ['car', 'bus', 'person', 'truck', 'no_match']
+yolo_classes = ['Car', 'bus', 'person', 'truck', 'no_match']
 rx = 1.6
 ry = 0
 rz = .04
@@ -180,6 +185,38 @@ r2c = cam_radar(rx, ry, rz, tx, ty, tz, mtx)
 frame = SRS_data_frame()
 idx=0
 epoch = 0
+cluster_hist = [[] for i in range(8000)]
+class_track = [[] for i in range(8000)]
+tracked_list = [TrackedObject() for i in range(8000)]
+
+print(cluster_hist)
+bus_count = 0
+person_count = 0
+car_count = 0
+truck_count = 0
+
+def match_measurement(measurements, tracks):
+    distance = 999
+    picked = None
+    thresh = 5
+    for index in range(measurements.shape[1]):
+        d = np.sqrt((measurements[0][index] - tracks[0])**2 + (measurements[1][index] - tracks[1])**2)
+        if d < distance and d < thresh:
+            distance = d
+            picked = index
+
+    return picked
+
+
+hull = np.array([[-18.06451613,  17.53246753],
+       [ 53.87096774, 114.93506494],
+       [ 63.87096774, 102.81385281],
+       [ 14.51612903,  27.92207792],
+       [ 10.96774194,   9.74025974],
+       [ -1.61290323,  -1.94805195],
+        [-18.06451613,  17.53246753]])
+
+p_radar = np.empty((0, 5))
 
 def animate(g):
     global image_np
@@ -208,148 +245,229 @@ def animate(g):
     global model
     global idx
     global epoch
-    i = next(bg)
-
-    # read ros Topic camera or radar
-    sensor = frame.load_data(i)
-    # print(idx)
-    # print(sensor)
-
-
-    if frame.full_data:
-        # print(abs(abs(frame.camera.message.header.stamp.to_sec() - frame.radar.message.header.stamp.to_sec()) - 1))
-        # print(frame.camera.message.header.stamp.to_sec() - frame.radar.message.header.stamp.to_sec())
-        print(frame.radar.message.header.stamp.to_sec())
-        # print(frame.radar.message.header.stamp.to_sec()- epoch)
-        # epoch = frame.radar.message.header.stamp.to_sec()
-
-        image_np = imgmsg_to_cv2(frame.camera.message)
-        npts = frame.radar.message.width
-        arr_all = pc2_numpy(frame.radar.message, npts)
+    global car_count
+    global bus_count
+    global person_count
+    global truck_count
+    global hull
+    if idx <= 0:
+        i = next(bg)
+        # read ros Topic camera or radar
         idx+=1
-        # draw points on plt figure
-        plt.cla()
-        axs.set_xlim(-50, 150)
-        axs.set_ylim(-50, 150)
-        arr = filter_zero(arr_all)
-        axs.scatter(arr_all[:, 0], arr_all[:, 1], s=0.5)
-        # draw points on plt figure
+    else:
+        i = next(bg)
 
-        pc = arr[:, :4]
-        ped_box = np.empty((0, 5))
-        # Perform class specific DBSCAN
-        total_box, cls = dbscan_cluster(pc, eps=3, min_sample=15, axs=axs)
+        sensor = frame.load_data(i)
+        if frame.full_data:
+            # print(abs(abs(frame.camera.message.header.stamp.to_sec() - frame.radar.message.header.stamp.to_sec()) - 1))
+            # print(frame.camera.message.header.stamp.to_sec() - frame.radar.message.header.stamp.to_sec())
+            # print(frame.radar.message.header.stamp.to_sec())
+            # print(frame.radar.message.header.stamp.to_sec()- epoch)
+            # epoch = frame.radar.message.header.stamp.to_sec()
 
-        # Do pedestrian if required
-        # ped_box, ped_cls = dbscan_cluster(pc, eps=2, min_sample=10)
+            plt.cla()
+            plt.plot(hull[:, 0], hull[:, 1], 'k-')
+            image_np = imgmsg_to_cv2(frame.camera.message)
+            npts = frame.radar.message.width
+            arr_all = pc2_numpy(frame.radar.message, npts)
+            # axs.scatter(arr_all[:, 0], arr_all[:, 1], s=0.5, c='red')
+            arr_concat = np.vstack((arr_all, p_radar))
+            path = mpltPath.Path(hull)
+            mask = path.contains_points(arr_concat[:, :2])
+            arr = arr_concat[mask]
+            idx += 1
+            # draw points on plt figure
+            axs.set_xlim(-50, 100)
+            axs.set_ylim(-50, 100)
+            # arr = filter_zero(arr_all)
+            # axs.scatter(arr[:, 0], arr[:, 1], s=0.5)
+            # draw points on plt figure
 
-        measSet = np.empty((0, 4))
-        # KF tracking
+            pc = arr[:, :4]
+            # Perform class specific DBSCAN
+            total_box, cls = dbscan_cluster(pc, eps=2.5, min_sample=15, axs=axs)
+            total_box_1, cls_1 = dbscan_cluster(pc, eps=2, min_sample=6, axs=axs)
+            total_box = np.vstack((total_box, total_box_1))
+            box_index = non_max_suppression_fast(total_box[:, :4], .2)
+            cls.extend(cls_1)
+            cls = [cls[ii] for ii in box_index]
+            total_box = total_box[box_index, :]
+            # for ii, jj in enumerate(cls):
+            #     plot_box(total_box[ii, :], jj, axs)
 
-        if cls:
-            # convert clusters into tracking input format
-            for ii in cls:
-                measSet = np.vstack((measSet, np.mean(ii, axis=0)))
-            measSet = measSet.T[:2, :]
-            # perform tracking
-            trackList, unassignedMeas = gating(trackList, lastTrackIdx, PG, MP_IMM, maxVals, sensorPos, measSet)
-            # perform gating
-            trackList = updateStateTracks(trackList,lastTrackIdx, filterType, measSet, maxVals,
-                                          lambdaVal,MP_IPDA, PG, PD, sensorPos, SVSFParams, k)
-            # update the state of each track
-            trackList = updateTracksStatus(trackList,lastTrackIdx, delTenThr, delConfThr, confTenThr,k)
-            # update the status of each track usiing the track manager
-            # initiate tracks for measurements that were not gated or in other words unassigned measurements
-            trackList, lastTrackIdx = initiateTracksMM(trackList,lastTrackIdx, unassignedMeas, maxVals, G_List, H,
-                                                       Q_List, R, models,filters, Ts, pInit, k, sensor, N)
+            measSet = np.empty((0, 4))
+            # KF tracking
+            _, detection = detect(source=image_np, model=model, device=device, colors=colors, names=names,
+                                     view_img=False)
+            if cls:
+                detection_list = [DetectedObject(ii) for ii in cls]
 
-            #input("")
-            k += 1
-            # iterate through all tracks
-            # ToDo change tracklet format so it doesn't need to iterate through all previous tracks
-            for jj, ii in enumerate(trackList[:lastTrackIdx]):
-                # print(ii.BLs)
-                # get centroid
-
-                centroid = ii.xPost[:2]
-                speed = np.sqrt(ii.xPost[2]**2 + ii.xPost[3]**2)
-                latency = ii.latency
-                pCurrent = ii.pCurrent
-                status = ii.status
-                # if track has terminated remove from tracked objects
-                if ii.endSample:
-                    tracked_object[jj] = None
-                    alive_track[jj] = False
-                    continue
-                # add if first appearance
-                if jj not in tracked_object.keys():
-                    tracked_object[jj] = radar_object((centroid[0], centroid[1]))
-                    alive_track[jj] = True
-                # update if in tracked objects
-                elif jj in tracked_object.keys() and tracked_object[jj]:
-                    tracked_object[jj].upd((centroid[0], centroid[1]))
-                    # axs.text(centroid[0], centroid[1] - 2, 'ID: ' + str(jj), fontsize=11,
+                features = np.empty((0, 12))
+                for det in detection_list:
+                    cc = det.cls
+                    bbox = get_bbox_cls(cc)
+                    det.centroid = np.mean(det.cls, axis=0)
+                    det.rad_box = bbox
+                    features = np.vstack((features, np.array(get_features(cc, bbox))))
+                    # axs.text(bbox[0], bbox[1] - 2, 'SVM: ' + str(classes[int(prediction[0])]), fontsize=11,
                     #          color='r')
-                    # axs.text(centroid[0], centroid[1] - 5, 'Speed: ' + f'{speed*3.6:.2f} km/h', fontsize=11,
+                    # print(bbox)
+                    bbox = get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], 0)
+                    bbox = project_to_image(bbox, r2c)
+                    pts = project_to_image(cc.T, r2c)
+                    box2d = get_bbox_2d(pts.T)
+                    cv2.rectangle(cam1, box2d[0], box2d[1], (255, 255, 0))
+                    box2d = [box2d[0][0], box2d[0][1], box2d[1][0], box2d[1][1]]
+                    box2d = convert_topy_bottomx(box2d)
+                    det.rad_box_cam_coord = box2d
+                    matched = find_gt(box2d, detection)
+                    det.cam_label = classes.index(matched[0][1])
+                    det.cam_box = matched[0][0]
+                    det.cam_rad_iou = matched[1]
+
+                    # cv2.putText(cam1, f'SVM: {classes[int(prediction[0])]}', box2d[0],
+                    #             cv2.FONT_HERSHEY_SIMPLEX,
+                    #             1, (255, 255, 255), 2, cv2.LINE_AA)
+
+                    # draw_projected_box3d(cam1, bbox)
+                features = scaler_model.fit_transform(features)
+                # print(features)
+                prediction = svm_model.predict_proba(features)
+                for ii, det in enumerate(detection_list):
+                    pd = np.argmax(prediction[ii, :])
+                    box2d = det.rad_box_cam_coord
+                    det.rad_label = prediction[ii, :]
+                    # axs.text(bbox[0], bbox[1] - 2, 'SVM: ' + str(classes[int(pd)]), fontsize=11,
                     #          color='r')
-                    # axs.text(centroid[0], centroid[1] - 12, 'Prob: ' + f'{pCurrent:.2f}', fontsize=11,
-                    #          color='r')
+                    cv2.putText(image_np, f'SVM: {classes[int(pd)]}', (box2d[0], box2d[1]),
+                                cv2.FONT_HERSHEY_SIMPLEX,
+                                1, (255, 255, 255), 2, cv2.LINE_AA)
+                # print(prediction)
+                # convert clusters into tracking input format
+                for det in detection_list:
+                    measSet = np.vstack((measSet, np.mean(det.cls, axis=0)))
+                measSet = measSet.T[:2, :]
+                # perform tracking
+                trackList, unassignedMeas = gating(trackList, lastTrackIdx, PG, MP_IMM, maxVals, sensorPos, measSet)
+                # perform gating
+                trackList = updateStateTracks(trackList,lastTrackIdx, filterType, measSet, maxVals,
+                                              lambdaVal,MP_IPDA, PG, PD, sensorPos, SVSFParams, k)
+                # update the state of each track
+                trackList = updateTracksStatus(trackList,lastTrackIdx, delTenThr, delConfThr, confTenThr,k)
+                # update the status of each track usiing the track manager
+                # initiate tracks for measurements that were not gated or in other words unassigned measurements
+                trackList, lastTrackIdx = initiateTracksMM(trackList,lastTrackIdx, unassignedMeas, maxVals, G_List, H,
+                                                           Q_List, R, models,filters, Ts, pInit, k, sensor, N)
 
-                    # if latency >=0:
-                    #    axs.text(centroid[0], centroid[1] - 8, 'Latency: ' + f'{latency*Ts:.2f} s', fontsize=11,
-                    #             color='r')
+                #input("")
+                k += 1
+                # iterate through all tracks
+                # ToDo change tracklet format so it doesn't need to iterate through all previous tracks
+                for jj, ii in enumerate(trackList[:lastTrackIdx]):
+                    # print(ii.BLs)
+                    # get centroid
 
-            # plot and update all alive tracks
-            for tk, j in enumerate(alive_track[:lastTrackIdx]):
-                if j:
-                    tracked_object[tk].life -= 1
-                    x = [obtk[0] for obtk in tracked_object[tk].tracklet]
-                    y = [obtk[1] for obtk in tracked_object[tk].tracklet]
-                    axs.plot(x, y, mew=0)
-                    if tracked_object[tk].life == 0:
-                        alive_track.remove(tk)
-        print(cam_msg)
-        print(f"dt = {i.message.header.stamp.to_sec() - cam_msg}")
-        # yolo detection
-        # cam1, detection = detect(source=cam1, model=model, device=device, colors=colors, names=names,
-        #                              view_img=False)
-        # Radar projection onto camera parameters
-        features = np.empty((0, 11))
-        box2ds = []
-        if cls:
-            for cc in cls:
-                bbox = get_bbox_cls(cc)
-                features = np.vstack((features, np.array(get_features(cc, bbox))))
-                # axs.text(bbox[0], bbox[1] - 2, 'SVM: ' + str(classes[int(prediction[0])]), fontsize=11,
-                #          color='r')
-                # print(bbox)
-                bbox = get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], 0)
-                bbox = project_to_image(bbox, r2c)
-                pts = project_to_image(cc.T, r2c)
-                # print(pts)
-                box2d = get_bbox_2d(pts.T)
-                box2ds.append(box2d)
-                cv2.rectangle(image_np, box2d[0], box2d[1], (255,255,0))
-                # cv2.putText(cam1, f'SVM: {classes[int(prediction[0])]}', box2d[0],
-                #             cv2.FONT_HERSHEY_SIMPLEX,
-                #             1, (255, 255, 255), 2, cv2.LINE_AA)
+                    centroid = ii.xPost[:2]
+                    speed = np.sqrt(ii.xPost[2]**2 + ii.xPost[3]**2)
+                    latency = ii.latency
+                    pCurrent = ii.pCurrent
+                    status = ii.status
+                    # if track has terminated remove from tracked objects
+                    if not ii.endSample:
 
-                # draw_projected_box3d(cam1, bbox)
-            prediction = svm_model.predict(features)
-            for ii, cc in enumerate(cls):
-                pd = prediction[ii]
-                bbox = get_bbox_cls(cc)
-                box2d = box2ds[ii]
-                axs.text(bbox[0], bbox[1] - 2, 'SVM: ' + str(classes[int(pd)]), fontsize=11,
-                         color='r')
-                cv2.putText(cam1, f'SVM: {classes[int(pd)]}', box2d[0],
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            1, (255, 255, 255), 2, cv2.LINE_AA)
-            print(prediction)
-        image_np, cam_arr = render_radar_on_image(arr_all, image_np, r2c, 9000, 9000)
-        cv2.imshow('Camera', image_np)
-        cv2.waitKey(1)
-        update = 1
+                        matched_measurement = match_measurement(measSet, centroid)
+                        if matched_measurement:
+                            # cluster_hist[jj].append([cls[matched_measurement]])
+                            # class_track[jj].append(prediction[matched_measurement])
+                            tracked_list[jj].dets.append(detection_list[matched_measurement])
+
+                        # print(f"cluster_hist[{jj}].append({jj})")
+                        # print(cluster_hist[0])
+                        # cluster_hist[jj].append(jj)
+                        # axs.scatter(centroid[0], centroid[1], s=0.5)
+                        # axs.scatter(cls[matched_measurement][:, 0], cls[matched_measurement][:, 1], s=0.5)
+                        # axs.text(cls[matched_measurement][0, 0], cls[matched_measurement][0, 1], f'Sample {jj}', fontsize=11,
+                        #          color='r')
+                        # axs.text(centroid[0], centroid[1], f'Sample {jj} center', fontsize=11,
+                        #          color='r')
+                        # print(type(cls[matched_measurement]))
+                        # print(len(cluster_hist[jj]))
+                    else:
+                        if tracked_list[jj]:
+                            radar_label, radar_centroid = tracked_list[jj].get_prediction()
+                            print([radar_label])
+                            print([radar_centroid])
+                            tracked_list[jj] = None
+
+                        # if cluster_hist[jj]:
+                        #     if len(cluster_hist)>=3:
+                        #         if class_track != 'counted':
+                        #             cl = max(class_track[jj], key=class_track[jj].count)
+                        #             if cl == 0:
+                        #                 car_count += 1
+                        #             elif cl == 1:
+                        #                 bus_count +=1
+                        #             elif cl == 2:
+                        #                 person_count +=1
+                        #             elif cl == 3:
+                        #                 truck_count += 1
+                        #             class_track[jj] = 'counted'
+                        # print(class_track)
+                        tracked_object[jj] = None
+                        alive_track[jj] = False
+                        continue
+                    # add if first appearance
+                    if jj not in tracked_object.keys():
+                        tracked_object[jj] = radar_object((centroid[0], centroid[1]))
+                        alive_track[jj] = True
+                    # update if in tracked objects
+                    elif jj in tracked_object.keys() and tracked_object[jj]:
+                        tracked_object[jj].upd((centroid[0], centroid[1]))
+                        # axs.text(centroid[0], centroid[1] - 2, 'ID: ' + str(jj), fontsize=11,
+                        #          color='r')
+                        # axs.text(centroid[0], centroid[1] - 5, 'Speed: ' + f'{speed*3.6:.2f} km/h', fontsize=11,
+                        #          color='r')
+                        # axs.text(centroid[0], centroid[1] - 12, 'Prob: ' + f'{pCurrent:.2f}', fontsize=11,
+                        #          color='r')
+
+                        # if latency >=0:
+                        #    axs.text(centroid[0], centroid[1] - 8, 'Latency: ' + f'{latency*Ts:.2f} s', fontsize=11,
+                        #             color='r')
+
+                # plot and update all alive tracks
+                for tk, j in enumerate(alive_track[:lastTrackIdx]):
+                    if j:
+                        tracked_object[tk].life -= 1
+                        x = [obtk[0] for obtk in tracked_object[tk].tracklet]
+                        y = [obtk[1] for obtk in tracked_object[tk].tracklet]
+                        axs.plot(x, y, mew=0)
+                        if tracked_object[tk].life == 0:
+                            alive_track.remove(tk)
+                    # if tracked_object[0]:
+                    #     x = [obtk[0] for obtk in tracked_object[0].tracklet]
+                    #     y = [obtk[1] for obtk in tracked_object[0].tracklet]
+                    #     axs.plot(x, y, mew=0)
+
+            # print(f"dt = {i.message.header.stamp.to_sec() - cam_msg}")
+            # yolo detection
+            # cam1, detection = detect(source=cam1, model=model, device=device, colors=colors, names=names,
+            #                              view_img=False)
+            # Radar projection onto camera parameters
+
+            axs.text(0, 60, f'Car_Count {car_count}', fontsize=11, color='b')
+            axs.text(0, 70, f'Bus_Count {bus_count}', fontsize=11, color='b')
+            axs.text(0, 80, f'Person_Count {person_count}', fontsize=11, color='b')
+            axs.text(0, 90, f'Truck_Count {truck_count}', fontsize=11, color='b')
+            # for c in cluster_hist[0]:
+            #     # print(c)
+            #     axs.scatter(c[0][:, 0], c[0][:, 1], s=0.5)
+            # input()
+
+            image_np, cam_arr = render_radar_on_image(arr_all, image_np, r2c, 9000, 9000)
+            cv2.imshow('Camera', image_np)
+            cv2.waitKey(1)
+            update = 1
+            p_arr_all = arr_all.copy()
 
 
 

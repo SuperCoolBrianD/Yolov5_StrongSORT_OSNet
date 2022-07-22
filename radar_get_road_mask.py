@@ -15,7 +15,7 @@ from vis_util import *
 from mpl_point_clicker import clicker
 
 # Read recording
-bag = rosbag.Bag("record/tripod.bag")
+bag = rosbag.Bag("record/car.bag")
 # bag = rosbag.Bag("record/traffic1.bag")
 topics = bag.get_type_and_topic_info()
 
@@ -50,8 +50,8 @@ mtx = np.array([[747.9932, 0., 655.5036],
 
 frame = SRS_data_frame()
 p_arr_all = np.array([[0, 0, 0, 0, 0]])
-figs, axs = plt.subplots(1, figsize=(6, 6))
-klicker = clicker(axs, ["event"], markers=["x"], **{"linestyle": "--"})
+
+
 for j, i in enumerate(bag.read_messages()):
     sensor = frame.load_data(i)
 
@@ -59,6 +59,8 @@ for j, i in enumerate(bag.read_messages()):
     # print(sensor)
 
     if frame.full_data:
+        figs, axs = plt.subplots(1, figsize=(6, 6))
+        klicker = clicker(axs, ["event"], markers=["x"], **{"linestyle": "--"})
         # print(abs(abs(frame.camera.message.header.stamp.to_sec() - frame.radar.message.header.stamp.to_sec()) - 1))
         # print(frame.camera.message.header.stamp.to_sec() - frame.radar.message.header.stamp.to_sec())
         print(frame.radar.message.header.stamp.to_sec())
@@ -76,5 +78,6 @@ for j, i in enumerate(bag.read_messages()):
         axs.set_ylim(-50, 100)
         hull = np.asarray(klicker.get_positions())
         print(hull)
-        input()
+        cv2.imshow('camera', image_np)
+        # input()
         p_arr_all = arr_all.copy()

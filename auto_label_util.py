@@ -21,7 +21,7 @@ def IOU(boxA, boxB):
     return iou
 
 
-def find_gt(r_box, c_box, image=np.empty([])):
+def find_gt_viz(r_box, c_box, image=np.empty([])):
     """
     Parameters
     ----------
@@ -42,34 +42,65 @@ def find_gt(r_box, c_box, image=np.empty([])):
     max_iou = 0
     w = 1
     s = 1
-    if image.any():
-        img = cv2.rectangle(image.copy(), (r_box[0], r_box[1]), (r_box[2], r_box[3]), (0, 255, 0), thickness=2)
-        cv2.putText(img, f'Radar Cluster', (r_box[0], r_box[1]),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.5, (0, 255, 0), 1, cv2.LINE_AA)
+    # if image.any():
+    #     img = cv2.rectangle(image.copy(), (r_box[0], r_box[1]), (r_box[2], r_box[3]), (0, 255, 0), thickness=2)
+    #     cv2.putText(img, f'Radar Cluster', (r_box[0], r_box[1]),
+    #                 cv2.FONT_HERSHEY_SIMPLEX,
+    #                 0.5, (0, 255, 0), 1, cv2.LINE_AA)
     for i in c_box:
         box = [int(ii) for ii in i[0]]
         iou = IOU(r_box, box)
-        if image.any():
-            img1 = cv2.rectangle(img.copy(), (i[0][0], i[0][1]), (i[0][2], i[0][3]), (0, 0, 255), thickness=2)
-            cv2.putText(img1, f'YOLOR Detection: {i[1]} iou: {iou}', (i[0][0]-15, i[0][1]-15),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.5, (0, 0, 255), 2, cv2.LINE_AA)
-            cv2.imshow('camera', img1)
-            cv2.waitKey(w)
+        # if image.any():
+        #     img1 = cv2.rectangle(img.copy(), (i[0][0], i[0][1]), (i[0][2], i[0][3]), (0, 0, 255), thickness=2)
+        #     cv2.putText(img1, f'YOLOR Detection: {i[1]} iou: {iou}', (i[0][0]-15, i[0][1]-15),
+        #                 cv2.FONT_HERSHEY_SIMPLEX,
+        #                 0.5, (0, 0, 255), 2, cv2.LINE_AA)
+            # cv2.imshow('camera', img1)
+            # cv2.waitKey(w)
 
         if iou > max_iou:
             matched = i
             max_iou = iou
 
-    if image.any() and matched[0]:
-        img1 = cv2.rectangle(img.copy(), (matched[0][0], matched[0][1]), (matched[0][2], matched[0][3]), (255, 255, 255), thickness=2)
-        cv2.putText(img1, f'Matched: {matched[1]}, iou: {max_iou}', (matched[0][0] - 15, matched[0][1] - 15),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.5, (255, 255, 255), 2, cv2.LINE_AA)
-        cv2.imshow('camera', img1)
-        cv2.waitKey(w+s)
+    # if image.any() and matched[0]:
+    #     img1 = cv2.rectangle(img.copy(), (matched[0][0], matched[0][1]), (matched[0][2], matched[0][3]), (255, 255, 255), thickness=2)
+    #     cv2.putText(img1, f'Matched: {matched[1]}, iou: {max_iou}', (matched[0][0] - 15, matched[0][1] - 15),
+    #                 cv2.FONT_HERSHEY_SIMPLEX,
+    #                 0.5, (255, 255, 255), 2, cv2.LINE_AA)
+        # cv2.imshow('camera', img1)
+        # cv2.waitKey(w+s)
     return matched, max_iou
+
+
+
+def find_gt(r_box, c_box, image=np.empty([])):
+    """
+    Parameters
+    ----------
+    box1 : TYPE
+        DESCRIPTION.
+    gt : list containing all 2D detection
+
+    Returns
+    -------
+    i : TYPE
+        DESCRIPTION.
+
+    """
+    '''
+    Match radar and camera detection using 2D boxes
+    '''
+    matched = [[], 'no_match', 0]
+    max_iou = 0
+    for i in c_box:
+        box = [int(ii) for ii in i[0]]
+        iou = IOU(r_box, box)
+        if iou > max_iou:
+            matched = i
+            max_iou = iou
+    return matched, max_iou
+
+
 
 
 def np2bin(pc):

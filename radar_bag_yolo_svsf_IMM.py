@@ -147,6 +147,8 @@ newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w,h), 1, (w,h))
 
 idx = 0
 
+
+
 def animate(g):
     global image_np
     global framei
@@ -278,10 +280,10 @@ def animate(g):
             k += 1
             # iterate through all tracks
             # ToDo change tracklet format so it doesn't need to iterate through all previous tracks
+
             for jj, ii in enumerate(trackList[:lastTrackIdx]):
                 # print(ii.BLs)
                 # get centroid
-
                 centroid = ii.xPost[:2]
                 speed = np.sqrt(ii.xPost[3]**2 + ii.xPost[4]**2)
                 # if track has terminated remove from tracked objects
@@ -289,6 +291,9 @@ def animate(g):
                     tracked_object[jj] = None
                     alive_track[jj] = False
                     continue
+                else:
+                    print(measSet)
+                    input()
                 # add if first appearance
                 if jj not in tracked_object.keys():
                     tracked_object[jj] = radar_object(((centroid[0], centroid[1]), tm))
