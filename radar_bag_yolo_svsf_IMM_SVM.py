@@ -263,7 +263,13 @@ def animate(g):
         else:
             sensor = frame.load_data_radar_only(i)
 
-        if frame.full_data:
+        if camera_detection:
+            frame_check = frame.full_data
+        else:
+            frame_check = frame.full_data and sensor == '/Radar'
+
+
+        if frame_check:
             print(abs(abs(rd- frame.radar.message.header.stamp.to_sec())))
             rd = frame.radar.message.header.stamp.to_sec()
             # print(frame.camera.message.header.stamp.to_sec() - frame.radar.message.header.stamp.to_sec())
