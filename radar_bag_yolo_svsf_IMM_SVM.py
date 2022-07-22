@@ -2,7 +2,7 @@ import sys
 sys.path.append('yolor')
 sys.path.append('SVSF_Track')
 from radar_utils import *
-from yolor.detect_custom import init_yoloR, detect
+
 from SVSF_Track.MTT_Functions import *
 import pickle
 import rosbag
@@ -18,7 +18,7 @@ topics = bag.get_type_and_topic_info()
 
 # old SORT tracker
 # mot_tracker = sort.Sort(min_hits=2, max_age=8, iou_threshold=0.1)
-
+camera_detection = False
 for i in topics[1]:
     print(i)
 
@@ -28,8 +28,10 @@ fig.canvas.set_window_title('Radar Detection and Tracking IMM_small')
 # create generator object for recording
 bg = bag.read_messages()
 s = 0
-model, device, colors, names = init_yoloR(weights='yolor/yolor_p6.pt', cfg='yolor/cfg/yolor_p6.cfg',
-                                           names='yolor/data/coco.names', out='inference/output', imgsz=1280, half=True)
+if camera_detection:
+    from yolor.detect_custom import init_yoloR, detect
+    model, device, colors, names = init_yoloR(weights='yolor/yolor_p6.pt', cfg='yolor/cfg/yolor_p6.cfg',
+                                               names='yolor/data/coco.names', out='inference/output', imgsz=1280, half=True)
 # adjust image visualization
 cv2.imshow('Camera', np.zeros((480, 640)))
 cv2.moveWindow('Camera', 800, 800)
@@ -250,6 +252,7 @@ def animate(g):
     global person_count
     global truck_count
     global hull
+    global camera_detection
     if idx <= 0:
         i = next(bg)
         # read ros Topic camera or radar
@@ -297,8 +300,9 @@ def animate(g):
 
             measSet = np.empty((0, 4))
             # KF tracking
-            _, detection = detect(source=image_np, model=model, device=device, colors=colors, names=names,
-                                     view_img=False)
+            if camera_detection:
+                _, detection = detect(source=image_np, model=model, device=device, colors=colors, names=names,
+                                         view_img=False)
             if cls:
                 detection_list = [DetectedObject(ii) for ii in cls]
 
@@ -320,10 +324,11 @@ def animate(g):
                     box2d = [box2d[0][0], box2d[0][1], box2d[1][0], box2d[1][1]]
                     box2d = convert_topy_bottomx(box2d)
                     det.rad_box_cam_coord = box2d
-                    matched = find_gt(box2d, detection)
-                    det.cam_label = classes.index(matched[0][1])
-                    det.cam_box = matched[0][0]
-                    det.cam_rad_iou = matched[1]
+                    if camera_detection:
+                        matched = find_gt(box2d, detection)
+                        det.cam_label = classes.index(matched[0][1])
+                        det.cam_box = matched[0][0]
+                        det.cam_rad_iou = matched[1]
 
                     # cv2.putText(cam1, f'SVM: {classes[int(prediction[0])]}', box2d[0],
                     #             cv2.FONT_HERSHEY_SIMPLEX,
@@ -394,7 +399,7 @@ def animate(g):
                         # print(len(cluster_hist[jj]))
                     else:
                         if tracked_list[jj]:
-                            radar_label, radar_centroid = tracked_list[jj].get_prediction()
+                            radar_label, radar_centroid = tracked_list[jj].get_prediction(camera=camera_detection)
                             print([radar_label])
                             print([radar_centroid])
                             tracked_list[jj] = None

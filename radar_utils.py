@@ -413,8 +413,10 @@ class TrackedObject:
     def __init__(self):
         self.dets=[]
 
-    def get_prediction(self):
-        cam_label = [i.cam_label for i in self.dets]
+    def get_prediction(self, camera=False):
+        if camera:
+            cam_label = [i.cam_label for i in self.dets]
+            cam_box = [i.cam_box for i in self.dets]
         r = [i.rad_label for i in self.dets]
         radar_label = np.empty((0, 4))
         for i in r:
@@ -425,7 +427,7 @@ class TrackedObject:
         centroid = np.empty((0, 4))
         for i in c:
             centroid = np.vstack((centroid, i))
-        cam_box = [i.cam_box for i in self.dets]
+
         return radar_label, centroid
 
 
