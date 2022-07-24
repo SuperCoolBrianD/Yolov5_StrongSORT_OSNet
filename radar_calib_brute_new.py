@@ -15,7 +15,7 @@ from vis_util import *
 
 
 # Read recording
-bag = rosbag.Bag("record/tripod.bag")
+bag = rosbag.Bag("record/working.bag")
 # bag = rosbag.Bag("record/traffic1.bag")
 topics = bag.get_type_and_topic_info()
 
@@ -108,12 +108,13 @@ for j, i in enumerate(bag.read_messages()):
         image_np = imgmsg_to_cv2(frame.camera.message)
         npts = frame.radar.message.width
         arr_all = pc2_numpy(frame.radar.message, npts)
-        print(np.max(arr_all[:, 0]))
-        print(np.max(arr_all[:, 1]))
-        print(np.max(arr_all[:, 2]))
-        print(np.min(arr_all[:, 0]))
-        print(np.min(arr_all[:, 1]))
-        print(np.min(arr_all[:, 2]))
+        print(arr_all.shape)
+        # print(np.max(arr_all[:, 0]))
+        # print(np.max(arr_all[:, 1]))
+        # print(np.max(arr_all[:, 2]))
+        # print(np.min(arr_all[:, 0]))
+        # print(np.min(arr_all[:, 1]))
+        # print(np.min(arr_all[:, 2]))
 
         arr = filter_zero(arr_all)
         # draw points on plt figure
@@ -172,8 +173,8 @@ for j, i in enumerate(bag.read_messages()):
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord('c'):
                     break
-            # v = mlab.view()
-            # mlab.clf()
+            v = mlab.view()
+            mlab.clf()
         print(rx, ry, rz, tx, ty, tz)
         print('next frame')
 

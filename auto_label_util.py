@@ -101,6 +101,15 @@ def find_gt(r_box, c_box, image=np.empty([])):
     return matched, max_iou
 
 
+def match_detection(r_box, c_box):
+    iou_arr = np.zeros((r_box.shape[0], c_box.shape[0]))
+    for i in range(r_box.shape[0]):
+        for j in range(c_box.shape[0]):
+            c = c_box[j, :]
+            r = r_box[i, :]
+            iou = IOU(r, c)
+            iou_arr[i, j] = iou
+    print(iou_arr)
 
 
 def np2bin(pc):

@@ -75,6 +75,7 @@ for j, i in enumerate(bag.read_messages()):
         image_np = imgmsg_to_cv2(frame.camera.message)
         npts = frame.radar.message.width
         arr_all = pc2_numpy(frame.radar.message, npts)
+        # print(arr_all.shape)
         # draw points on plt figure
         arr = filter_zero(arr_all)
         total_box, cls = dbscan_cluster(arr, eps=2, min_sample=20)

@@ -1,6 +1,7 @@
 import mayavi.mlab as mlab
 import rosbag
 from projectutils import draw_radar
+from radar_utils import *
 from retina_view.msg import MsgRadarPoint
 
 import time
@@ -8,7 +9,7 @@ import time
 
 
 
-bag = rosbag.Bag("record/car_1_ped_1.bag")
+bag = rosbag.Bag("record/traffic.bag")
 topics = bag.get_type_and_topic_info()
 # print(topics)
 t = 0
@@ -38,8 +39,8 @@ for j, i in enumerate(bag.read_messages()):
         arr = filter_zero(arr)
 
         if image_np.any():
-            img, arr = render_lidar_on_image(arr, image_np, np.pi/2, 0, 0, 0, 0, 0, 9000, 9000)
-            print(img.shape)
+            # img, arr = render_radar_on_image(arr, image_np, np.pi/2, 0, 0, 0, 0, 0, 9000, 9000)
+            # print(img.shape)
             draw_radar(arr, fig=fig)
 
         mlab.clf(fig)

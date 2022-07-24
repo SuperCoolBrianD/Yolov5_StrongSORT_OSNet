@@ -152,7 +152,7 @@ if __name__ == "__main__":
         )
         img = Image.fromarray(top_view[0].astype("uint8"))
         img.save("result.png")
-        ig = cv2.imread('result.png')
+        ig = cv2.imread('../result.png')
         cv2.imshow('result.png', ig)
         cv2.waitKey(0)
         input()

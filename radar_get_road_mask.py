@@ -1,21 +1,15 @@
-import mayavi.mlab as mlab
 import sys
 
 import cv2
 
 sys.path.append('yolor')
 sys.path.append('SVSF_Track')
-#from yolor.detect_custom import init_yoloR, detect
-from SVSF_Track.MTT_Functions import *
 from radar_utils import *
-from projectutils import draw_radar
 import rosbag
-from matplotlib.animation import FuncAnimation
-from vis_util import *
 from mpl_point_clicker import clicker
 
 # Read recording
-bag = rosbag.Bag("record/car.bag")
+bag = rosbag.Bag("record/working.bag")
 # bag = rosbag.Bag("record/traffic1.bag")
 topics = bag.get_type_and_topic_info()
 

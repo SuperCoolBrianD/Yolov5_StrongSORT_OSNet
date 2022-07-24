@@ -51,7 +51,7 @@ def preprocess_data(dataset_dir):
     """
 
     # Get list of data samples
-    seq_list = os.listdir('dataset')
+    seq_list = os.listdir('../dataset')
     for seq in tqdm(range(len(seq_list)), desc="Process sequences", total=len(seq_list)):
         radar_path = f"dataset/{seq:05d}/radar.pkl"
         radar = pickle.load(open(radar_path,'rb'))

@@ -1,5 +1,6 @@
-import mayavi.mlab as mlab
+# import mayavi.mlab as mlab
 import matplotlib
+matplotlib.use('TkAgg')
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
@@ -9,6 +10,7 @@ import matplotlib.patches as patches
 import sensor_msgs.point_cloud2 as pc2
 from sensor_msgs.msg import Image
 import sys
+import math
 import matplotlib.path as mpltPath
 
 
@@ -387,7 +389,7 @@ class SRS_data_frame:
             self.camera_frame+=1
         if self.has_radar and self.has_camera:
             self.full_data = True
-
+        return data.topic
     def load_data_radar_only(self, data):
         # if self.full_data:
         #     self.clear_data()
@@ -412,15 +414,26 @@ class SRS_data_frame:
 
 
 class DetectedObject:
-    def __init__(self, cls):
-        self.cls = cls
-        self.cam_label = None
-        self.cam_rad_iou = None
-        self.rad_label = None
-        self.rad_box = None
-        self.cam_box = None
-        self.rad_box_cam_coord = None
-        self.centroid = np.empty((0, 4))
+    def __init__(self, cls=None, c_d=None):
+        if c_d:
+            self.cls = None
+            self.cam_label = c_d[1]
+            self.cam_box = c_d[0]
+            self.cam_id = c_d[2]
+            self.cam_rad_iou = None
+            self.rad_label = None
+            self.rad_box = None
+            self.rad_box_cam_coord = None
+            self.centroid = np.empty((0, 4))
+        else:
+            self.cls = cls
+            self.cam_label = None
+            self.cam_box = None
+            self.cam_rad_iou = None
+            self.rad_label = None
+            self.rad_box = None
+            self.rad_box_cam_coord = None
+            self.centroid = np.empty((0, 4))
 
 
 class TrackedObject:
@@ -594,3 +607,4 @@ def non_max_suppression_fast(boxes, overlapThresh):
     # return only the bounding boxes that were picked using the
     # integer data type
     return pick
+

@@ -1,16 +1,35 @@
 import sys
-sys.path.append('yolor')
 sys.path.append('SVSF_Track')
-from radar_utils import *
+camera_detection = True
+if camera_detection:
+    # sys.path.append('yolor')
+    # from yolor.detect_custom import init_yoloR, detect
+    # model, device, colors, names = init_yoloR(weights='yolor/yolor_p6.pt', cfg='yolor/cfg/yolor_p6.cfg',
+    #                                            names='yolor/data/coco.names', out='inference/output', imgsz=1280, half=half)
+    from Yolov5_StrongSORT_OSNet.track_custom import load_weight_sort, process_track
+    sys.path.append('Yolov5_StrongSORT_OSNet')
+    sys.path.append('Yolov5_StrongSORT_OSNet/strong_sort/deep/reid')
+    device = '0'
+    outputs = [None]
+    device, model, stride, names, pt, imgsz, cfg, strongsort_list, \
+    dt, seen, curr_frames, prev_frames, half = load_weight_sort(device,
+                                                                'Yolov5_StrongSORT_OSNet/strong_sort/configs/strong_sort.yaml')
 
-from SVSF_Track.MTT_Functions import *
-import pickle
+    print(names)
+
+from radar_utils import *
 import rosbag
+from SVSF_Track.MTT_Functions import *
+from SVSF_Track.track import track
+import pickle
 from matplotlib.animation import FuncAnimation
 from learn_util import *
 from auto_label_util import *
+import matplotlib
+matplotlib.use('TkAgg')
 import time
 # Read recording
+
 bag = rosbag.Bag("record/working.bag")
 # bag = rosbag.Bag("record/traffic3.bag")
 # bag = rosbag.Bag("record/traffic1.bag")
@@ -18,7 +37,7 @@ topics = bag.get_type_and_topic_info()
 
 # old SORT tracker
 # mot_tracker = sort.Sort(min_hits=2, max_age=8, iou_threshold=0.1)
-camera_detection = True
+
 for i in topics[1]:
     print(i)
 
@@ -28,11 +47,7 @@ fig.canvas.set_window_title('Radar Detection and Tracking IMM_small')
 # create generator object for recording
 bg = bag.read_messages()
 s = 0
-half = False
-if camera_detection:
-    from yolor.detect_custom import init_yoloR, detect
-    model, device, colors, names = init_yoloR(weights='yolor/yolor_p6.pt', cfg='yolor/cfg/yolor_p6.cfg',
-                                               names='yolor/data/coco.names', out='inference/output', imgsz=1280, half=half)
+
 # adjust image visualization
 cv2.imshow('Camera', np.zeros((480, 640)))
 cv2.moveWindow('Camera', 800, 800)
@@ -176,7 +191,7 @@ cam_msg = 0
 svm_model = pickle.load(open('svm_model_scale.pkl', 'rb'))
 scaler_model = pickle.load(open('scaler_model.pkl', 'rb'))
 classes = ['car', 'bus', 'person', 'truck', 'no_match']
-yolo_classes = ['Car', 'bus', 'person', 'truck', 'no_match']
+yolo_classes = ['car', 'bus', 'person', 'truck', 'no_match']
 rx = 1.6
 ry = 0
 rz = .04
@@ -217,11 +232,11 @@ def match_measurement(measurements, tracks):
 #        [ -1.61290323,  -1.94805195],
 #         [-18.06451613,  17.53246753]])
 # for working
-hull = np.array([[ 25.80645161, 133.11688312],
-       [-25.80645161,   7.57575758],
-       [ -2.90322581,  -1.51515152],
-       [ 47.41935484, 125.32467532]])
-
+hull = np.array([[ 25.80645161,  93.29004329],
+       [ 20.        ,  69.48051948],
+       [ -2.90322581,  16.66666667],
+       [-15.16129032,  23.59307359],
+       [ 14.83870968,  95.88744589]])
 p_radar = np.empty((0, 5))
 rd = 0
 cd = 0
@@ -261,17 +276,16 @@ def animate(g):
     global camera_detection
     global rd
     global cd
+    global outputs
     if idx <= 0:
         i = next(bg)
         # read ros Topic camera or radar
         idx+=1
     else:
         i = next(bg)
-        print(i.topic)
         if camera_detection:
             sensor = frame.load_data(i)
             if sensor == "/Radar":
-                print(rd - i.message.header.stamp.to_sec())
                 rd = i.message.header.stamp.to_sec()
         else:
             sensor = frame.load_data_radar_only(i)
@@ -282,6 +296,7 @@ def animate(g):
 
 
         if frame_check:
+            ts = time.time()
             # print(abs(abs(rd- frame.radar.message.header.stamp.to_sec())))
             # rd = frame.radar.message.header.stamp.to_sec()
             # print(abs(abs(cd - frame.camera.message.header.stamp.to_sec())))
@@ -314,54 +329,93 @@ def animate(g):
             # Perform class specific DBSCAN
             total_box, cls = dbscan_cluster(pc, eps=2.5, min_sample=15, axs=axs)
             total_box_1, cls_1 = dbscan_cluster(pc, eps=2, min_sample=6, axs=axs)
+            print(isinstance(cls, type(None)))
+            if isinstance(cls, type(None)):
+                cls = []
+            if isinstance(cls_1, type(None)):
+                cls_1 = []
             total_box = np.vstack((total_box, total_box_1))
             box_index = non_max_suppression_fast(total_box[:, :4], .2)
             cls.extend(cls_1)
             cls = [cls[ii] for ii in box_index]
+
             total_box = total_box[box_index, :]
-            for ii, jj in enumerate(cls):
-                plot_box(total_box[ii, :], jj, axs)
+
 
             measSet = np.empty((0, 4))
             # KF tracking
+            detection_list = []
             if camera_detection:
-                _, detection = detect(source=image_np, model=model, device=device, colors=colors, names=names,
-                                         view_img=False, half=half)
+                _, _, im0, detection, outputs = process_track(image_np, i, curr_frames, prev_frames, outputs,
+                                                     device, model, stride, names, pt, imgsz, cfg, strongsort_list, dt,
+                                                     seen, half, classes=[5, 7, 0, 2])
+                if detection and len(detection):
+                    detection_list = [DetectedObject(c_d=ii) for ii in detection]
             if cls:
-                detection_list = [DetectedObject(ii) for ii in cls]
+
+                for ii, jj in enumerate(cls):
+                    plot_box(total_box[ii, :], jj, axs)
+                # detection_list = [DetectedObject(ii) for ii in cls]
 
                 features = np.empty((0, 12))
-                for det in detection_list:
-                    cc = det.cls
+                radar_detection = []
+                for cc in cls:
                     bbox = get_bbox_cls(cc)
-                    det.centroid = np.mean(det.cls, axis=0)
-                    det.rad_box = bbox
                     features = np.vstack((features, np.array(get_features(cc, bbox))))
-                    # axs.text(bbox[0], bbox[1] - 2, 'SVM: ' + str(classes[int(prediction[0])]), fontsize=11,
-                    #          color='r')
-                    # print(bbox)
                     bbox = get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], 0)
                     bbox = project_to_image(bbox, r2c)
                     pts = project_to_image(cc.T, r2c)
                     box2d = get_bbox_2d(pts.T)
-                    cv2.rectangle(cam1, box2d[0], box2d[1], (255, 255, 0))
+                    cv2.rectangle(im0, box2d[0], box2d[1], (255, 255, 0))
                     box2d = [box2d[0][0], box2d[0][1], box2d[1][0], box2d[1][1]]
+
                     box2d = convert_topy_bottomx(box2d)
-                    det.rad_box_cam_coord = box2d
-                    if camera_detection:
-                        matched = find_gt(box2d, detection)
-                        det.cam_label = classes.index(matched[0][1])
-                        det.cam_box = matched[0][0]
-                        det.cam_rad_iou = matched[1]
+                    radar_detection.append([cc, bbox, box2d])
+
+                features = scaler_model.fit_transform(features)
+                prediction = svm_model.predict_proba(features)
+                for ii in range(len(cls)):
+                    pd = np.argmax(prediction[ii, :])
+                    radar_detection[ii].append(pd)
+                radar_2d = np.asarray([ii[2] for ii in radar_detection])
+                cam_2d = np.asarray([ii[0] for ii in detection])
+                # if cam_2d.any() and radar_2d.any():
+                #     matched = match_detection(radar_2d, cam_2d)
+                cv2.imshow('Camera', im0)
+                cv2.waitKey(10)
+                input()
+                """
+                
+                    # cc = det.cls
+                    # bbox = get_bbox_cls(cc)
+                    # det.centroid = np.mean(det.cls, axis=0)
+                    # det.rad_box = bbox
+                    # features = np.vstack((features, np.array(get_features(cc, bbox))))
+                    # axs.text(bbox[0], bbox[1] - 2, 'SVM: ' + str(classes[int(prediction[0])]), fontsize=11,
+                    #          color='r')
+                    # print(bbox)
+                    # bbox = get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], 0)
+                    # bbox = project_to_image(bbox, r2c)
+                    # pts = project_to_image(cc.T, r2c)
+                    # box2d = get_bbox_2d(pts.T)
+                    # cv2.rectangle(cam1, box2d[0], box2d[1], (255, 255, 0))
+                    # box2d = [box2d[0][0], box2d[0][1], box2d[1][0], box2d[1][1]]
+                    # box2d = convert_topy_bottomx(box2d)
+                    # det.rad_box_cam_coord = box2d
+                    # if camera_detection:
+                    #     matched = find_gt(box2d, detection)
+                    #     det.cam_label = classes.index(matched[0][1])
+                    #     det.cam_box = matched[0][0]
+                    #     det.cam_rad_iou = matched[1]
 
                     # cv2.putText(cam1, f'SVM: {classes[int(prediction[0])]}', box2d[0],
                     #             cv2.FONT_HERSHEY_SIMPLEX,
                     #             1, (255, 255, 255), 2, cv2.LINE_AA)
 
                     # draw_projected_box3d(cam1, bbox)
-                features = scaler_model.fit_transform(features)
+
                 # print(features)
-                prediction = svm_model.predict_proba(features)
+                # prediction = svm_model.predict_proba(features)
                 for ii, det in enumerate(detection_list):
                     pd = np.argmax(prediction[ii, :])
                     box2d = det.rad_box_cam_coord
@@ -373,8 +427,8 @@ def animate(g):
                                 1, (255, 255, 255), 1, cv2.LINE_AA)
                 # print(prediction)
                 # convert clusters into tracking input format
-                for det in detection_list:
-                    measSet = np.vstack((measSet, np.mean(det.cls, axis=0)))
+                for cc in cls:
+                    measSet = np.vstack((measSet, np.mean(cc, axis=0)))
                 measSet = measSet.T[:2, :]
                 # perform tracking
                 trackList, unassignedMeas = gating(trackList, lastTrackIdx, PG, MP_IMM, maxVals, sensorPos, measSet)
@@ -387,7 +441,6 @@ def animate(g):
                 # initiate tracks for measurements that were not gated or in other words unassigned measurements
                 trackList, lastTrackIdx = initiateTracksMM(trackList,lastTrackIdx, unassignedMeas, maxVals, G_List, H,
                                                            Q_List, R, models,filters, Ts, pInit, k, sensor, N)
-
                 #input("")
                 k += 1
                 # iterate through all tracks
@@ -403,45 +456,16 @@ def animate(g):
                     status = ii.status
                     # if track has terminated remove from tracked objects
                     if not ii.endSample:
-
                         matched_measurement = match_measurement(measSet, centroid)
                         if matched_measurement:
                             # cluster_hist[jj].append([cls[matched_measurement]])
                             # class_track[jj].append(prediction[matched_measurement])
                             tracked_list[jj].dets.append(detection_list[matched_measurement])
-
-                        # print(f"cluster_hist[{jj}].append({jj})")
-                        # print(cluster_hist[0])
-                        # cluster_hist[jj].append(jj)
-                        # axs.scatter(centroid[0], centroid[1], s=0.5)
-                        # axs.scatter(cls[matched_measurement][:, 0], cls[matched_measurement][:, 1], s=0.5)
-                        # axs.text(cls[matched_measurement][0, 0], cls[matched_measurement][0, 1], f'Sample {jj}', fontsize=11,
-                        #          color='r')
-                        # axs.text(centroid[0], centroid[1], f'Sample {jj} center', fontsize=11,
-                        #          color='r')
-                        # print(type(cls[matched_measurement]))
-                        # print(len(cluster_hist[jj]))
                     else:
                         if tracked_list[jj]:
                             radar_label, radar_centroid = tracked_list[jj].get_prediction(camera=camera_detection)
-                            # print([radar_label])
-                            # print([radar_centroid])
                             tracked_list[jj] = None
 
-                        # if cluster_hist[jj]:
-                        #     if len(cluster_hist)>=3:
-                        #         if class_track != 'counted':
-                        #             cl = max(class_track[jj], key=class_track[jj].count)
-                        #             if cl == 0:
-                        #                 car_count += 1
-                        #             elif cl == 1:
-                        #                 bus_count +=1
-                        #             elif cl == 2:
-                        #                 person_count +=1
-                        #             elif cl == 3:
-                        #                 truck_count += 1
-                        #             class_track[jj] = 'counted'
-                        # print(class_track)
                         tracked_object[jj] = None
                         alive_track[jj] = False
                         continue
@@ -493,11 +517,12 @@ def animate(g):
             # input()
 
             image_np, cam_arr = render_radar_on_image(arr_all, image_np, r2c, 9000, 9000)
-            cv2.imshow('Camera', image_np)
+            cv2.imshow('Camera', im0)
             cv2.waitKey(1)
             update = 1
             p_arr_all = arr_all.copy()
-
+            print(time.time() - ts)
+"""
 
 
 ani = FuncAnimation(fig, animate, interval=10, frames=2000)
