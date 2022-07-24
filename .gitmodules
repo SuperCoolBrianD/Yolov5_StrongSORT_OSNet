@@ -4,3 +4,6 @@
 [submodule "sort"]
 	path = sort
 	url = https://github.com/SuperCoolBrianD/sort.git
+[submodule "Yolov5_StrongSORT_OSNet"]
+	path = Yolov5_StrongSORT_OSNet
+	url = https://github.com/SuperCoolBrianD/Yolov5_StrongSORT_OSNet.git
