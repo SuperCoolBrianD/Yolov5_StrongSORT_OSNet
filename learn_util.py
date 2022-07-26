@@ -8,7 +8,10 @@ def get_features(pc, bbox):
     l = bbox[3]  # L
     w = bbox[4]  # W
     h = bbox[5]  # S
-    d = n / l / w / h  # density
+    if l != 0 and w != 0 and h != 0:
+        d = n / l / w / h  # density
+    else:
+        d = 0
     stdx = np.std(pc[:, 0])  # stdx
     stdy = np.std(pc[:, 1])  # stdx
     stdz = np.std(pc[:, 2])  # stdz
@@ -47,11 +50,14 @@ def distance_weighted_voting_custom(dets, dis, weights):
             if rg > p and rg < j:
                 weight_index = ii
                 p = j
+
+        if weight_index >= weights.shape[0]:
+            weight_index = weights.shape[0]-1
         weight = weights[weight_index]
         score = (1-weight)*dets[i, :]
         l += score
-    print()
-    return l.index(max(l))
+    l = list(l)
+    return [l.index(max(l))]
 
 
 

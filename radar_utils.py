@@ -327,7 +327,7 @@ def dbscan_cluster(pc, eps=3, min_sample=25, axs=None):
 
 
 def plot_box(bbox, c, axs):
-    axs.scatter(c[:, 0], c[:, 1], s=0.5)
+    # axs.scatter(c[:, 0], c[:, 1], s=0.5)
     rect = patches.Rectangle((bbox[0], bbox[1]), bbox[2]-bbox[0], bbox[3]- bbox[1], linewidth=1, edgecolor='blue',
                              facecolor='none')
     axs.add_patch(rect)
@@ -335,6 +335,19 @@ def plot_box(bbox, c, axs):
 
 def get_centroid(bbox):
     return bbox[2]-bbox[0], bbox[3]-bbox[1]
+
+
+def match_measurement(detection_list, tracks):
+    distance = 999
+    picked = None
+    thresh = 3
+    for index, det in enumerate(detection_list):
+        if det.sensor != 'Camera':
+            d = np.sqrt((det.centroid[0] - tracks[0])**2 + (det.centroid[1] - tracks[1])**2)
+            if d < distance and d < thresh:
+                distance = d
+                picked = index
+    return picked
 
 
 class radar_object:
@@ -390,6 +403,8 @@ class SRS_data_frame:
         if self.has_radar and self.has_camera:
             self.full_data = True
         return data.topic
+
+
     def load_data_radar_only(self, data):
         # if self.full_data:
         #     self.clear_data()
@@ -414,50 +429,68 @@ class SRS_data_frame:
 
 
 class DetectedObject:
-    def __init__(self, cls=None, c_d=None):
-        if c_d:
-            self.cls = None
+    def __init__(self, r_d=None, c_d=None):
+        if c_d and not  r_d:
             self.cam_label = c_d[1]
             self.cam_box = c_d[0]
             self.cam_id = c_d[2]
+            self.sensor = "Camera"
+            self.cls = None
             self.cam_rad_iou = None
             self.rad_label = None
             self.rad_box = None
-            self.rad_box_cam_coord = None
-            self.centroid = np.empty((0, 4))
-        else:
-            self.cls = cls
+            self.rad_box2d = None
+            self.centroid = None
+            self.rad_id = None
+        elif r_d and not c_d:
+            self.cls = r_d[0]
+            self.centroid = r_d[1]
+            self.rad_box = r_d[2]
+            self.rad_box2d = r_d[3]
+            self.rad_label = r_d[4]
+            self.sensor = "Radar"
             self.cam_label = None
             self.cam_box = None
             self.cam_rad_iou = None
-            self.rad_label = None
-            self.rad_box = None
-            self.rad_box_cam_coord = None
-            self.centroid = np.empty((0, 4))
+            self.cam_id = None
+            self.rad_id = None
+
+        elif r_d and c_d:
+            self.cls = r_d[0]
+            self.centroid = r_d[1]
+            self.rad_box = r_d[2]
+            self.rad_box2d = r_d[3]
+            self.rad_label = r_d[4]
+            self.cam_label = c_d[1]
+            self.cam_box = c_d[0]
+            self.cam_id = c_d[2]
+            self.sensor = 'Both'
+            self.cam_rad_iou = None
+            self.rad_id = None
 
 
 class TrackedObject:
     def __init__(self):
         self.dets=[]
+        self.start = None
 
     def get_prediction(self, camera=False):
         if camera:
             cam_label = [i.cam_label for i in self.dets]
             cam_box = [i.cam_box for i in self.dets]
+            cam_id = [i.cam_id for i in self.dets]
         r = [i.rad_label for i in self.dets]
         radar_label = np.empty((0, 4))
         for i in r:
-            # print(i)
             radar_label = np.vstack((radar_label, i))
         c = [i.centroid for i in self.dets]
         centroid = np.empty((0, 4))
         for i in c:
             centroid = np.vstack((centroid, i))
-
-        return radar_label, centroid
-
-
-
+        if camera:
+            return radar_label, centroid, cam_label, cam_box, cam_id
+        else:
+            return radar_label, centroid
 
 def timestamp_sync(imgs, t):
     diff = 10000

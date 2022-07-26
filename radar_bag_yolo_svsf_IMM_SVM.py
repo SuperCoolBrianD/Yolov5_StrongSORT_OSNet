@@ -18,7 +18,7 @@ topics = bag.get_type_and_topic_info()
 
 # old SORT tracker
 # mot_tracker = sort.Sort(min_hits=2, max_age=8, iou_threshold=0.1)
-camera_detection = True
+run_cam_d = True
 for i in topics[1]:
     print(i)
 
@@ -29,7 +29,7 @@ fig.canvas.set_window_title('Radar Detection and Tracking IMM_small')
 bg = bag.read_messages()
 s = 0
 half = False
-if camera_detection:
+if run_cam_d:
     from yolor.detect_custom import init_yoloR, detect
     model, device, colors, names = init_yoloR(weights='yolor/yolor_p6.pt', cfg='yolor/cfg/yolor_p6.cfg',
                                                names='yolor/data/coco.names', out='inference/output', imgsz=1280, half=half)
@@ -258,7 +258,7 @@ def animate(g):
     global person_count
     global truck_count
     global hull
-    global camera_detection
+    global run_cam_d
     global rd
     global cd
     if idx <= 0:
