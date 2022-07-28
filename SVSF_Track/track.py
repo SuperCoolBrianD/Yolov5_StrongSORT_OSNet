@@ -11,7 +11,7 @@ from scipy import linalg
 
 
 class track:
-    def __init__(self,z0,G,H,Q,R,maxVel, maxAcc,omegaMax,pInit,startSample,Ts, modelType, sensor,isMM, N):
+    def __init__(self,z0,G,H,Q,R,maxVel, maxAcc,omegaMax,pInit,startSample,Ts, modelType, sensor,sensorPos,isMM, N):
         #initializes track using 1-point initialization
         
         #Inputs: 
@@ -31,16 +31,45 @@ class track:
             #sensor = sensor used to get measurements
             #N = total number of samples in the simulation
             
-        
+    
         #apply 1-point initialization
         xPost0 = np.array([z0[0],z0[1],0,0,0,0,0]) #initial state
         
-        sigma_x = math.sqrt(R[0,0])
-        sigma_y = math.sqrt(R[1,1])
-        
-        
-        P_Post0 = np.diag(np.array([sigma_x**2,sigma_y**2,(maxVel/2)**2,(maxVel/2)**2,(maxAcc/2)**2,(maxAcc/2)**2,(omegaMax/2)**2])) #initial co-variance
-        
+        if sensor=="Lidar":
+            sigma_x = math.sqrt(R[0,0])
+            sigma_y = math.sqrt(R[1,1])
+            P_Post0 = np.diag(np.array([sigma_x**2,sigma_y**2,(maxVel/2)**2,(maxVel/2)**2,(maxAcc/2)**2,(maxAcc/2)**2,(omegaMax/2)**2])) #initial co-variance
+        elif sensor=="Radar":
+            rangeStd = math.sqrt(R[0,0])
+            angleStd = math.sqrt(R[1,1])
+            
+            r0= z0[0]
+            angle0 = z0[1]
+            rangeMeas0 = r0 + np.random.normal(0,rangeStd,1) #obtain radar measurement
+            angleMeas0 = angle0 + np.random.normal(0,angleStd,1)
+            
+            n = xPost0.shape[0]
+            P_Post0 = np.zeros((n,n))
+            
+            lambda1 = math.exp(-(angleStd**2)/2)
+            lambda2 = math.exp(-2*(angleStd**2))
+            
+            xS = sensorPos[0]
+            yS = sensorPos[1]
+            
+            xPos0 = xS + (rangeMeas0/lambda1)*math.cos(angleMeas0)
+            yPos0 = yS + (rangeMeas0/lambda1)*math.sin(angleMeas0)
+            
+            xPost0 = np.array([xPos0,yPos0,0,0,0,0,0])
+            
+            P_Post0[0,0] = (lambda1**(-2)  -2)*(rangeMeas0**2)*((math.cos(angleMeas0))**2) + 0.5*(rangeMeas0**2  + rangeStd**2)*(1+lambda2*math.cos(2*angleMeas0))
+            P_Post0[1,1] =  (lambda1**(-2)  -2)*(rangeMeas0**2)*((math.sin(angleMeas0))**2) + 0.5*(rangeMeas0**2  + rangeStd**2)*(1-lambda2*math.cos(2*angleMeas0))
+            P_Post0[0,1] =  (lambda1**(-2)  -2)*(rangeMeas0**2)*(math.cos(angleMeas0)*math.sin(angleMeas0)) + 0.5*(rangeMeas0**2  + rangeStd**2)*lambda2*math.sin(2*angleMeas0)
+            P_Post0[1,0] = P_Post0[0,1]
+            P_Post0[2,2] = (maxVel/2)**2
+            P_Post0[3,3] = (maxVel/2)**2
+            P_Post0[6,6] = (omegaMax/2)**2
+            
         #properties of track
         self.xPost = xPost0
         self.P_Post = P_Post0
@@ -56,6 +85,18 @@ class track:
         self.H = H
         self.G = G
         self.pCurrent = pInit
+        self.numMisses = 0
+        self.n_k = 1
+        self.m_k = 1
+        self.mBar_k = 0
+        self.idx = 0
+        
+        #self.predTraj = predTraj
+        #self.numPreds = 0 # number of times the track was predicted
+        
+        #Np = int(tP/Ts) #number of samples in the prediction horizon
+        #predHistoryArr = np.zeros((Np,Np)) #stores Np predicted trajectories
+        #predTimeArr = np.zeros((Np,Np)) #gives the times into the future for each predicted trajectory
         
         n = xPost0.shape[0] #dimension of state vector
         xEsts = np.zeros((n,N)) #array of state estimates initialized 
@@ -63,8 +104,11 @@ class track:
         BLs = np.zeros((n,N)) #BL widths
         
         xEsts[:,startSample] = xPost0 #store initial state at the starting sample/scan/frame
-        ePost0 = z0 - H@xPost0 #a-posteriori measurement error required for SVSF
         
+        if sensor=="Lidar":
+            ePost0 = z0 - H@xPost0 #a-posteriori measurement error required for SVSF
+        elif sensor=="Radar":
+            ePost0 = z0 - np.array([getRange(xPost0,sensorPos),getAngle(xPost0,sensorPos)])
         self.ePost = ePost0 #set ePost as a property
         self.xEsts = xEsts #estimated states is also a property
         self.BLs = BLs
@@ -122,7 +166,6 @@ class track:
         
         P_Pred = 0.5*(P_Pred + P_Pred.T) #for numerical stability
         
-        
         if sensor=="Radar": #if the sensor is radar
             rangePred = getRange(xPred,sensorPos) #predict measurement using non-linear model
             anglePred = getAngle(xPred,sensorPos)
@@ -132,7 +175,7 @@ class track:
             zPred[0] = rangePred #store into a vector
             zPred[1] = anglePred
             
-            H = obtain_Jacobian_H(xPred, sensorPos) #obtain Jacobian matrix
+            H = obtain_Jacobian_H(xPred, sensorPos,False) #obtain Jacobian matrix
         else:
             zPred = H@xPred #if the sensor is lidar use the linear measurement model
             
@@ -141,7 +184,7 @@ class track:
         K = P_Pred@H.T@ S_inv #KF gain
         
         m = zPred.shape[0] #dimension of measurement vector
-        
+                   
         numGated = int(sum(gatedArr)) #number of measurements in the gate of this track
         
         xMeas = measSet[0,:] #x positions of measurements
@@ -225,6 +268,13 @@ class track:
         H = self.H #measurement matrix
         gatedArr = self.gateArr #binary array, if element i is 1, that means measurement i lies in the gate of this track 
         
+        '''
+        n_m = measSet.shape[1]
+        if len(gatedArr)!= n_m:
+            a = n_m - len(gatedArr)
+            gatedArr = np.hstack((gatedArr,np.zeros((a,)) ))
+        '''
+            
         n = xPost.shape[0] #dimension of state vector
         m = measSet.shape[0] #dimension of measurement matrix
         m_k = int(sum(gatedArr)) #number of gated measurements
@@ -265,9 +315,8 @@ class track:
             zPred = H@xPred #predict measurement
             
         S = H@P_Pred@H.T + R #innovation co-variance
-        S = .5*(S + S.T)
+        S = 0.5*(S+S.T)
         S_inv = np.linalg.pinv(S) #innovation co-variance inverse
-        K = P_Pred@H.T@ S_inv #KF gain
         
         cn = math.pi #term used to get the volume of the gated region ellipsoid
         V_k = cn*math.sqrt(abs(np.linalg.det(gamma*S))) #volume of gated region
@@ -281,8 +330,7 @@ class track:
         yMeas = measSet[1,:] #y component of measurements in gate
         gateMeas = np.vstack((xMeas[gatedArr==1],yMeas[gatedArr==1])) #measurements in the gate stacked
         
-        
-        abs_det = abs(np.linalg.det(2*math.pi*S)) #term used to get the likelihood ratio
+        abs_det = abs(np.linalg.det(2*math.pi*S)) #term used to get the likelihood ratio 
         #T =   1/(  ((2*math.pi)**(m/2)) *math.sqrt(abs_det_S))
         T = 1/(math.sqrt(abs_det)) #term used to get the likelihood ratio
         innovations = np.zeros((m,m_k)) #innovation vectors
@@ -299,14 +347,10 @@ class track:
             prob_z_i_Vals[i]=prob_z_i
           #  probZ_Sum = probZ_Sum+ prob_z_i
         probZ_Sum = sum(prob_z_i_Vals) #sum of probabilities 
-
-        #print(mHat)
+        
         if m_k==0:
             delta_k = PD*PG #if m_k is zero use this formula to get the delta_k term
         else:
-            if mHat == 0:
-                mHat = mHat + 1E-100
-
             delta_k = PD*PG- PD*PG*(V_k/mHat)*probZ_Sum #otherwise, apply this formula to obtain delta_k
             
         pCurrent = ((1-delta_k)/(1-delta_k*pPred))*pPred #update probability of track existence
@@ -327,6 +371,8 @@ class track:
             nu_k = nu_k + Beta_i*nu_i #weighted innovation
             
             middleTerm = middleTerm + Beta_i*np.outer(nu_i, nu_i) #term used to get a co-variance term
+        
+        K = P_Pred@H.T@ S_inv #KF gain
             
         P_Tilda = K@(middleTerm - np.outer(nu_k,nu_k))@K.T #co-variance due to measurement origin uncertainty
         P_c = P_Pred - K@S@K.T #co-variance from standard KF
@@ -506,7 +552,6 @@ class track:
                     Kl = P_Pred_21@H_1.T@S_inv #KF lower gain
                 else:
                     Kl = np.diag(E_y * sat(M @ePred,psiY)) @ linalg.pinv(np.diag(M@ePred)) @ M #CMSVSF lower gain
-                    print('SVSF')
             elif modelType=="CT":
                 if psiY_opt[0,0] <psiY[0] and psiY_opt[1,1] < psiY[1] and psiY_opt[2,2] < psiY[2]:
                     Kl = P_Pred_21@H_1.T@S_inv #KF lower gain
@@ -517,7 +562,6 @@ class track:
                     Kl = P_Pred_21@H_1.T@S_inv #KF lower gain
                 else:
                     Kl = np.diag(E_y * sat(M @ePred,psiY)) @ linalg.pinv(np.diag(M@ePred)) @ M #CMSVSF lower gain
-                    print('SVSF')
             #K = np.block([Ku,Kl]).T #stacked gain
             K = np.vstack((Ku,Kl))      
             P_c = P_Pred - K@H@P_Pred - P_Pred@H.T@K.T + K@S@K.T #update covariance
@@ -722,16 +766,46 @@ class track:
         self.xPost = xPostNew
         self.P_Post = P_PostNew
         self.ePost = ePost
+        self.pCurrent = pCurrent
         self.zPred = zPred
         self.S = S
-        self.pCurrent = pCurrent
         
         return xPostNew,P_PostNew
+    
+    def incrementMiss(self): #if no measurements lie in the tracks gate, increase the number of missed detections
+        numMisses = self.numMisses
+        numMisses = numMisses + 1
+        self.numMisses = numMisses
+    
+    def predictTrajectory(self,tP):
+        modelType = self.modelType
+        xPost = self.xPost
+        Ts = self.Ts
+        
+        Np = int(tP/Ts)
+        posPreds = np.zeros((2,Np))
+        
+        xPred = xPost #initialize predictor
+        for k in range(Np):
+            if modelType == "CV":
+                xPred,_ = CVModel(xPred,np.zeros((3,3)),Ts)
+            elif modelType == "CT":
+                xPred,_,_ = CTModel(xPred,np.zeros((3,3)),Ts)
+            elif modelType == "CA": 
+                xPred,_ = CAModel(xPred,np.zeros((3,3)),Ts)
+            
+            posPred = xPred[0:2]
+            
+            posPreds[:,k] = posPred
+            
+        return posPreds
+        
     
     def stackState(self,k): 
         #stores the state estimate from time step k
         xEsts = self.xEsts #array of state estimates
         xEsts[:,k] = self.xPost #include state estimate in the array
+        self.xEsts = xEsts
         
     def stackBL(self,k):
         BLs = self.BLs
@@ -892,7 +966,7 @@ def getRange(xVec,sensorPos): #obtains the range using the radar measurment mode
     x_k = xVec[0] #x-position of target
     y_k = xVec[1] #y-position of target
     
-    R = math.sqrt((x_k-xS)**2 + (y_k-yS)**2) #range formula
+    R = math.sqrt((x_k-xS)**2   + (y_k-yS)**2) #range formula
     
     return R
 
@@ -931,14 +1005,16 @@ def obtain_Jacobian_H(xVec,sensorPos): #obtains the Jacobian of the radar measur
     H = np.zeros((m,n)) #allocate Jacobian matrix
     
     #obtain Jacobian matrix entries
-    denomTerm = math.sqrt((x_k-xS)**2 + (y_k-yS)**2)
-    denomTermSqr = denomTerm**2
+    #denomTerm = math.sqrt((x_k-xS)**2 + (y_k-yS)**2)
+    #denomTermSqr = denomTerm**2
+    
+    R = getRange(xVec,sensorPos)
 
     #compute entries of Jacobian
-    H[0,0] = (x_k-xS)/denomTerm
-    H[0,1] = (y_k-yS)/denomTerm
-    H[1,0] = -(y_k-yS)/denomTermSqr
-    H[1,1] = (x_k-xS)/denomTermSqr
+    H[0,0] = (x_k-xS)/R
+    H[0,1] = (y_k-yS)/R
+    H[1,0] = -(y_k-yS)/(R**2)
+    H[1,1] = (x_k-xS)/(R**2)
     
     return H
 

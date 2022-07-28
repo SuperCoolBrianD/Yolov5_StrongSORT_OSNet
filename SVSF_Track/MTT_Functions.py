@@ -158,34 +158,38 @@ def getRange(xVec,sensorPos):
     x_k = xVec[0]
     y_k = xVec[1]
     
-    R = sqrt((x_k-xS)**2 + (y_k-yS)**2)
+    R = sqrt((x_k-xS)**2  + (y_k-yS)**2)
     
     return R
 
 def getAngle(xVec,sensorPos):
     xS = sensorPos[0]
     yS = sensorPos[1]
-
+    
     x_k = xVec[0]
     y_k = xVec[1]
-
+    
     theta = atan2(y_k-yS, x_k-xS)
     
     return theta
 
 def getRangeRate(xVec,sensorPos):
-    R = getRange(xVec,sensorPos)
-
-    x_k = xVec[0]
+    xS = sensorPos[0] #X and Y coordinates of sensor
+    yS = sensorPos[1]
+    
+    x_k = xVec[0] #X and Y position of target
     y_k = xVec[1]
     vx_k = xVec[2]
-    vy_k = xVec[3]
-
-    rDot = (x_k*vx_k + y_k*vy_k)/R
-
+    vy_k =xVec[3]
+    
+    R = getRange(xVec,sensorPos)
+    
+    rDot = (vx_k*(x_k-xS) + vy_k*(y_k-yS))
+    
     return rDot
+    
 
-def obtain_Jacobian_H(xVec,sensorPos):
+def obtain_Jacobian_H(xVec,sensorPos, includeVel):
     n = xVec.shape[0] #number of states
     
     xS = sensorPos[0] #X and Y coordinates of sensor
@@ -193,19 +197,33 @@ def obtain_Jacobian_H(xVec,sensorPos):
     
     x_k = xVec[0] #X and Y position of target
     y_k = xVec[1]
+    vx_k = xVec[2]
+    vy_k =xVec[3]
     
-    m = 2 #number of measurements
+    if includeVel == True:
+        m=3
+    else:
+        m = 2 #number of measurements
     
     H = np.zeros((m,n)) #allocate Jacobian matrix
     
     #obtain Jacobian matrix entries
-    denomTerm = sqrt((x_k-xS)**2 + (y_k-yS)**2)
-    denomTermSqr = denomTerm**2
+    R = getRange(xVec,sensorPos)
+    #denomTerm = sqrt((x_k-xS)**2 + (y_k-yS)**2)
+    #denomTermSqr = denomTerm**2
 
-    H[0,0] = (x_k-xS)/denomTerm
-    H[0,1] = (y_k-yS)/denomTerm
-    H[1,0] = -(y_k-yS)/denomTermSqr
-    H[1,1] = (x_k-xS)/denomTermSqr
+    H[0,0] = (x_k-xS)/R
+    H[0,1] = (y_k-yS)/R
+    
+    H[1,0] = -(y_k-yS)/(R**2)
+    H[1,1] = (x_k-xS)/(R**2)
+    
+    if includeVel == True:
+        rDot = getRangeRate(xVec, sensorPos)
+        H[2,0] = (vx_k/R) - ((x_k-xS)/(R**3))*rDot
+        H[2,1] = (vy_k/R) - ((y_k-yS)/(R**3))*rDot
+        H[2,2] = (x_k-xS)/R
+        H[2,3] = (y_k-yS)/R
     
     return H
 
@@ -323,8 +341,7 @@ def generateClutter(xLims,yLims,lambdaVal):
     
     return clutterMeas
 
-
-def gating(trackList,lastTrackIdx,PG, MP, maxVals,sensorPos,measSet):
+def gating(trackList,lastTrackIdx,PG, MP, maxVals,sensorPos,measSet,k):
     #takes the measurements obtained from the current time step or frame, then selects them based on the stochastic distance
     
     #numTracks = len(trackList)
@@ -350,8 +367,22 @@ def gating(trackList,lastTrackIdx,PG, MP, maxVals,sensorPos,measSet):
                 G_i= track_i.G
                 H = track_i.H
                 gateArr = gatingSingle(xPost_i,P_Post_i,G_i,H,Q_i,R,PG,Ts,modelType_i,sensorPos,sensor,measSet)
-
-
+                
+                '''
+                if sum(gateArr)==0 and status==2:
+                    track_i.incrementMiss() #if no detections are in the gate, increment the number of missed detections
+                    
+                    if track_i.numMisses >= 1:
+                        xPosts = track_i.xEsts
+                        
+                        if track_i.numMisses ==1:
+                            xPostPrev = xPosts[:,k-1] #state estimate from previous time step
+                            posPred = predictor(xPostPrev,modelType_i,0.1,Ts) #predict state to the current time step
+                            measSet = np.hstack((posPred,measSet)) #augment the predicted position as another measurement
+                            gateArr = gatingSingle(xPost_i,P_Post_i,G_i,H,Q_i,R,PG,Ts,modelType_i,sensorPos,sensor,measSet) #perform gating again using the augmented measurement
+                            gateMat = np.hstack((gateMat,np.zeros((numTracks,1)))) 
+                '''
+                            
             else:
                 #if a IMM algorithm is being used
                 '''
@@ -369,15 +400,18 @@ def gating(trackList,lastTrackIdx,PG, MP, maxVals,sensorPos,measSet):
                 modeTrackList_i = track_i.modeTrackList #mode conditioned tracks of track i
                 gateArr, modeTrackList_i = gatingMM(modeTrackList_i,PG,sensorPos,measSet) #perform gating
                 track_i.modeTrackList = modeTrackList_i #store updated info for the mode-conditioned tracks
+            
             track_i.gateArr = gateArr #store gateArr as a property for track_i
             gateMat[i,:] = gateArr #store gateArr into the matrix
             trackList[i] = track_i #store the updated track into the trackList
         
     sumGateMat = np.sum(gateMat,axis=0) #take the sum of the matrix to see which measurments were not gated
     nonGatedIdx = np.nonzero(sumGateMat==0) #indices of measurements not gated
+    
     unassignedMeas = measSet[:,nonGatedIdx] #obtain the measurements not gated, also known as unassigned measurements
-    unassignedMeas = np.vstack((measSet[:,nonGatedIdx][0], measSet[:,nonGatedIdx][1]))
-    return trackList, unassignedMeas
+    unassignedMeas = np.vstack((measSet[:,nonGatedIdx][0],measSet[:,nonGatedIdx][1]))
+    
+    return trackList, unassignedMeas, measSet
 
 def gatingMM(modeTrackList,PG,sensorPos,measSet):
     #Performs gating for IMM algorithms by taking the union of validated measurements from each model
@@ -413,7 +447,7 @@ def gatingMM(modeTrackList,PG,sensorPos,measSet):
 
 def gatingSingle(xPost,P_Post,G,H,Q,R,PG,Ts,modelType,sensorPos,sensor,measSet):
     nm = measSet.shape[1] #number of measurements
-    m = H.shape[0] #number of measured states
+    m = measSet.shape[0] #number of measured states
     gamma = chi2.ppf(PG, df=m) #threshold for gating based on the gate probability PG
     
     #Predict the state according to the model
@@ -443,7 +477,7 @@ def gatingSingle(xPost,P_Post,G,H,Q,R,PG,Ts,modelType,sensorPos,sensor,measSet):
         zPred[0] = rangePred #store into a vector
         zPred[1] = anglePred
         
-        H = obtain_Jacobian_H(xPred, sensorPos) #obtain Jacobian matrix
+        H = obtain_Jacobian_H(xPred, sensorPos,False) #obtain Jacobian matrix
     else: #if LIDAR
         zPred = H@xPred 
 
@@ -463,7 +497,7 @@ def gatingSingle(xPost,P_Post,G,H,Q,R,PG,Ts,modelType,sensorPos,sensor,measSet):
     return gateArr
  
 
-def initiateTracks(trackList,lastTrackIdx,measSet, maxVel,maxAcc,maxOmega,G,H,Q,R,modelType,Ts,pInit, startSample,sensor,N):
+def initiateTracks(trackList,lastTrackIdx,measSet, maxVel,maxAcc,maxOmega,G,H,Q,R,modelType,Ts,pInit, startSample,sensor,sensorPos,N):
     #initiates a track for each measurement in measSet
     
     isMM = False
@@ -475,7 +509,8 @@ def initiateTracks(trackList,lastTrackIdx,measSet, maxVel,maxAcc,maxOmega,G,H,Q,
             j=j+1 #index of new track
             z_i = measSet[:,i] #ith measurement 
             
-            track_j = track(z_i,G,H,Q,R,maxVel, maxAcc,maxOmega,pInit,startSample,Ts,modelType,sensor,isMM,N) #initiate jth track 
+            track_j = track(z_i,G,H,Q,R,maxVel, maxAcc,maxOmega,pInit,startSample,Ts,modelType,sensor,sensorPos,isMM,N) #initiate jth track 
+            track_j.stackState(startSample)
             trackList[j] = track_j #store track at position j in trackList
            
         lastTrackIdx = j #index of last track
@@ -483,7 +518,6 @@ def initiateTracks(trackList,lastTrackIdx,measSet, maxVel,maxAcc,maxOmega,G,H,Q,
 
 def initiateTracksMM(trackList,lastTrackIdx,measSet, maxVals,G_List,H,Q_List,R,models,filters,Ts,pInit, startSample,sensor,N):
     #initiates a track for each measurement in measSet
-    
     numMeas = measSet.shape[1]
     
     #trackList = []
@@ -497,16 +531,12 @@ def initiateTracksMM(trackList,lastTrackIdx,measSet, maxVals,G_List,H,Q_List,R,m
             trackList[j] = trackMM_j #store track at position j in trackList
            
         lastTrackIdx = j #index of last track
-    return trackList, lastTrackIdx
+    return trackList,lastTrackIdx
 
 
 def updateStateTracks(trackList,lastTrackIdx, filterType,measSet, maxVals,lambdaVal,MP,PG,PD,sensorPos,SVSFParams,k):
     #updates the state and co-variance of each track using a filter
-    psiZ = SVSFParams[0]
-    psiY = SVSFParams[1]
-    gammaZ = SVSFParams[2]
-    gammaY = SVSFParams[3]
-    T_mat = SVSFParams[4]
+    
     #numTracks = len(trackList)
     numTracks = lastTrackIdx + 1 
 #    if numTracks>0:
@@ -549,7 +579,7 @@ def updateStateTracks(trackList,lastTrackIdx, filterType,measSet, maxVals,lambda
             elif filterType == "IPDAGVBLSVSF":
                 track_i.IPDAGVBLSVSF(measSet, MP, PD, PG, lambdaVal, sensorPos, T_mat, gammaZ, gammaY, psiZ, psiY)
                 track_i.stackBL(k)
-            elif filterType == "IMMIPDAKF":
+            elif filterType == "IMMIPDA":
                 #track_i.IMMIPDAKF(measSet,MP,PD,PG,lambdaVal,maxVals,sensorPos)
                 track_i.IMMIPDA_Filter(measSet,MP,PD,PG,lambdaVal,SVSFParams,maxVals,sensorPos)
             track_i.stackState(k) #store the state estimate into the track's array
@@ -599,16 +629,197 @@ def updateTracksStatus(trackList,lastTrackIdx,delTenThr, delConfThr, confTenThr,
                 trackList[i].endSample = k
             elif p>=confTenThr: #if above the confirmation threshold
                 trackList[i].status = 2 #confirm track, set that status as confirmed
-                trackList[i].latency = k - trackList[i].startSample
         elif status==2: #if the track is confirmed
-            if p<delConfThr: #if below the deletion threshold
+            #numMisses = trackList[i].numMisses
+            #if p<delConfThr or numMisses>5: #if below the deletion threshold or if the number of missed detections is greater than 2
+            if p<delConfThr:
                 trackList[i].status = 0  #removed confirmed track
                 trackList[i].endSample = k #store the last sample/frame processed
                 
+    return trackList
+
+def updateTracksStatus_MN(trackList,lastTrackIdx,N1,M2,N2,N3,k):
+    numTracks= lastTrackIdx+1
+    
+    for i in range(numTracks):
+        m_k = trackList[i].m_k #number of captured detections
+        mBar_k = trackList[i].mBar_k #number of missed detections
+        gateArr = trackList[i].gateArr #binary array, the size is equivalent to the number of measurements, e.g. if there are 3 measurements at the current time step and only the 1st lies in the gate, then gateArr=[1,0,0]
+        s_k = trackList[i].status #status of track
+        n_k = trackList[i].n_k #age of track
+        idx = trackList[i].idx #index to keep track of scan with a interval
+        
+        n_k = n_k+1
+        ng = sum(gateArr)
+        
+        if ng>0:
+            m_k = m_k + 1
+        else:
+            mBar_k = mBar_k + 1
+            
+        if n_k<= N1: # N1/N1 phase, requires N1 detections in the first N1 scans
+            if mBar_k>0 and s_k==1:
+                s_k = 0 #if there is a missed detection in the first N1 scans/frames, terminate track
+                trackList[i].endSample = k #last frame/scan of the track
                 
+            if n_k==N1: #once it reaches the end of this phase, set m_k and mBar_k to 0 to initialize for the next phase
+                m_k = 0
+                mBar_k = 0
                 
+        elif n_k > N1 and n_k <= (N1+N2): #M2/N2 phase
+            if m_k >= M2 and s_k==1:
+                s_k = 2  #if there are M2 detections in the next N2 scans, confirm track
+            
+            if mBar_k > (N2-M2) and s_k==1: #if the number of missed detections is above the difference between N2 and M2, delete track
+                s_k = 0
+                trackList[i].endSample = k
+                
+            if n_k == (N1+N2): #once it reaches the end of the phase, reset likewise to earlier
+                m_k = 0
+                mBar_k = 0
+                idx = 0 #used to keep track of a scan within a interval
+        elif n_k >(N1 + N2) : #if the age is above the initiation interval, check the next N2 scans
+            idx = idx + 1 #keeps track of scan/frame number within the next N2 scans
+            if s_k==1: #if tenative
+                if m_k>=M2: #if the number of caught detections are above M2, confirm track
+                    s_k=2
+                    
+                if mBar_k >N3: #if the number of missed detections are above N3, delete track
+                    s_k =0
+                    trackList[i].endSample = k
+            elif s_k==2:
+                if mBar_k >N3:  #if the number of missed detections are above N3, delete track
+                    s_k =0
+                    trackList[i].endSample = k
+                    
+            if idx ==N2: #if the last scan is reached in the interval, reset for the next N2 scans
+                idx = 0
+                m_k = 0
+                mBar_k = 0
+            
+                    
+        trackList[i].n_k = n_k
+        trackList[i].m_k = m_k
+        trackList[i].mBar_k = mBar_k
+        trackList[i].status = s_k
+        trackList[i].idx = idx
+                
+            
     return trackList
             
+    
+    '''
+    for i in range(numTracks): #for each track
+        m_k = trackList[i].m_k #number of detections caught
+        mBar_k = trackList[i].mBar_k #number of detections missed
+        n_k = trackList[i].n_k #track age
+        gateArr = trackList[i].gateArr #array used to obtain which measurements fall into the gate
+        s_k = trackList[i].status
+        idx = trackList[i].idx
+        
+        n_k = n_k+1 #update age
+        ng = sum(gateArr) #number of gated measurements
+        
+        if n_k <= (N1 + N2):
+            if ng>0: #if there is at least 1 measurement present
+                m_k = m_k +1 #increment the number of caught detections
+            else:
+                mBar_k = mBar_k + 1 #if there are no measurements increase the number of missed detections
+            
+            if n_k <= N1:
+                if mBar_k>0: #if the number of missed measurements is non-zero
+                    s_k = 0 #delete track
+                    trackList[i].endSample = k
+                else:
+                    s_k = 1 #tenative track
+            else:
+                if mBar_k > (N2 - M2):
+                    s_k = 0
+                    trackList[i].endSample = k
+                elif m_k >= (N1 + M2):
+                    s_k = 2
+                else:
+                    s_k = 1
+            idx = 0
+        else:
+            if n_k == (N1+N2+1): #if the age is 1 above the age of the initiator
+                idx = 1 #create a array that holds Boolean values indicating whether a measurement is within the gate
+                m_k = 0
+                mBar_k = 0
+                
+                if ng>0:
+                    m_k = m_k + 1
+                else:
+                    mBar_k = mBar_k + 1 
+                idx = idx+1
+            else: #if the age is more than 1 above            
+                if idx>N2: #if the index goes above N2, reinitialize the array and reset the index to 1
+                    m_k = 0
+                    mBar_k = 0
+                    idx=1
+                
+                if ng>0:
+                    m_k = m_k+1
+                else:
+                    mBar_k = mBar_k + 1 #number of missed detections
+                    
+                idx = idx+1
+                    
+            if s_k==1: #if tenative
+                if m_k>=M2: #if the sum of the detections is above or equal to M2, confirm track
+                    s_k = 2
+                    #idx = 1
+                elif mBar_k > (N2-M2):
+                    s_k =0
+                    #idx = 1
+                    trackList[i].endSample = k
+                
+
+            elif s_k==2:
+                if mBar_k > (N2-M2):
+                    s_k = 0
+                    #idx = 1
+                    trackList[i].endSample = k
+                
+        trackList[i].status = s_k
+        trackList[i].n_k = n_k
+        trackList[i].m_k = m_k
+        trackList[i].mBar_k = mBar_k
+        trackList[i].idx = idx
+    '''
+        
+    return trackList
+    
+
+def predictor(xPost, modelType, tP, Ts):
+    Np = int(tP/Ts)
+    
+    posPreds = np.zeros((2,Np))
+    
+    xPred = xPost #initialize predictor
+    for k in range(Np):
+        if modelType == "CV":
+            xPred,_ = CVModel(xPred,np.zeros((3,3)),Ts)
+        elif modelType == "CT":
+            xPred,_,_ = CTModel(xPred,np.zeros((3,3)),Ts)
+        elif modelType == "CA": 
+            xPred,_ = CAModel(xPred,np.zeros((3,3)),Ts)
+        
+        posPred = xPred[0:2]
+        
+        posPreds[:,k] = posPred
+        
+    return posPreds
+            
+def predTrajsTracks(trackList,lastTrackIdx,tP):
+    numTracks= lastTrackIdx+1
+    for i in range(numTracks): #for each track
+        status = trackList[i].status #current status
+        
+        if status == 1 or status == 2: #if the track is tenative or confirmed predict the trajectory
+            trackList[i].predictTrajectory(tP)
+
+    return trackList
 
 def computeRMSE(truth,est):
     #computes the scalar RMSE between 2 arrays
@@ -635,6 +846,17 @@ def RMSEPlot(errPlotsX,errPlotsY):
     
     #rmsePlot = sumErrVec**.5
     '''
+    
+    idx = int(len(errPlotsX[0,:])/2)
+    errCol= errPlotsX[:,idx]
+    errIdx = np.nonzero(errCol==0)
+    numErrCases = errIdx[0].size
+    
+    for i in range(numErrCases):
+        lastRowIdx = errPlotsX.shape[0]-1
+        errPlotsX = np.delete(errPlotsX,lastRowIdx,axis=0)
+        errPlotsY = np.delete(errPlotsY,lastRowIdx,axis=0)
+
     
     N = errPlotsX.shape[1] #number of samples
     numRuns = errPlotsX.shape[0] #number of Monte Carlo runs
