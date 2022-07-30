@@ -40,14 +40,16 @@ class track:
             sigma_y = math.sqrt(R[1,1])
             P_Post0 = np.diag(np.array([sigma_x**2,sigma_y**2,(maxVel/2)**2,(maxVel/2)**2,(maxAcc/2)**2,(maxAcc/2)**2,(omegaMax/2)**2])) #initial co-variance
         elif sensor=="Radar":
+            m = R.shape[0]
+            
             rangeStd = math.sqrt(R[0,0])
             angleStd = math.sqrt(R[1,1])
             
             r0= z0[0]
             angle0 = z0[1]
-            rangeMeas0 = r0 + np.random.normal(0,rangeStd,1) #obtain radar measurement
-            angleMeas0 = angle0 + np.random.normal(0,angleStd,1)
-            
+            rangeMeas0 = z0[0]  #obtain radar measurement
+            angleMeas0 = z0[1]
+                        
             n = xPost0.shape[0]
             P_Post0 = np.zeros((n,n))
             
@@ -108,7 +110,11 @@ class track:
         if sensor=="Lidar":
             ePost0 = z0 - H@xPost0 #a-posteriori measurement error required for SVSF
         elif sensor=="Radar":
-            ePost0 = z0 - np.array([getRange(xPost0,sensorPos),getAngle(xPost0,sensorPos)])
+            
+            if m==2:
+                ePost0 = z0 - np.array([getRange(xPost0,sensorPos),getAngle(xPost0,sensorPos)])
+            else:
+                ePost0 = z0 - np.array([getRange(xPost0,sensorPos),getAngle(xPost0,sensorPos),getRangeRate(xPost0,sensorPos)])
         self.ePost = ePost0 #set ePost as a property
         self.xEsts = xEsts #estimated states is also a property
         self.BLs = BLs
@@ -170,12 +176,20 @@ class track:
             rangePred = getRange(xPred,sensorPos) #predict measurement using non-linear model
             anglePred = getAngle(xPred,sensorPos)
             
-            m=2
+            m=R.shape[0]
             zPred = np.zeros((m,))
             zPred[0] = rangePred #store into a vector
             zPred[1] = anglePred
             
-            H = obtain_Jacobian_H(xPred, sensorPos,False) #obtain Jacobian matrix
+            if m==3:
+                rDotPred = getRangeRate(xPred, sensorPos)
+                zPred[2] = rDotPred
+            
+            if m==2:
+                includeVel = False
+            else:
+                includeVel = True
+            H = obtain_Jacobian_H(xPred, sensorPos,includeVel) #obtain Jacobian matrix
         else:
             zPred = H@xPred #if the sensor is lidar use the linear measurement model
             
@@ -189,7 +203,12 @@ class track:
         
         xMeas = measSet[0,:] #x positions of measurements
         yMeas = measSet[1,:]  #y positions of measurements
-        gatedMeas = np.vstack((xMeas[gatedArr==1],yMeas[gatedArr==1])) #stack the x and y measurements
+        
+        if m==2:
+            gatedMeas = np.vstack((xMeas[gatedArr==1],yMeas[gatedArr==1])) #stack the x and y measurements
+        else:
+            zMeas = measSet[2,:]
+            gatedMeas = np.vstack((xMeas[gatedArr==1],yMeas[gatedArr==1],zMeas[gatedArr==1])) #stack the x and y measurements
         
         L_Vals = np.zeros(numGated,) #likelihood rations array
         innovations = np.zeros((m,numGated)) #array of innovation vectors
@@ -305,12 +324,20 @@ class track:
             rangePred = getRange(xPred,sensorPos) #predict measurement using non-linear model
             anglePred = getAngle(xPred,sensorPos)
             
-            m=2
+            m=R.shape[0]
             zPred = np.zeros((m,))
             zPred[0] = rangePred #store into a vector
             zPred[1] = anglePred
             
-            H = obtain_Jacobian_H(xPred, sensorPos) #obtain Jacobian matrix
+            if m==3:
+                rDotPred = getRangeRate(xPred, sensorPos)
+                zPred[2] = rDotPred
+            
+            if m==2:
+                includeVel = False
+            else:
+                includeVel = True
+            H = obtain_Jacobian_H(xPred, sensorPos,includeVel) #obtain Jacobian matrix
         else: #if LIDAR
             zPred = H@xPred #predict measurement
             
@@ -328,7 +355,13 @@ class track:
         
         xMeas = measSet[0,:] #x component of measurements in gate
         yMeas = measSet[1,:] #y component of measurements in gate
-        gateMeas = np.vstack((xMeas[gatedArr==1],yMeas[gatedArr==1])) #measurements in the gate stacked
+        
+        if m==2:
+            gateMeas = np.vstack((xMeas[gatedArr==1],yMeas[gatedArr==1])) #stack the x and y measurements
+        else:
+            zMeas = measSet[2,:]
+            gateMeas = np.vstack((xMeas[gatedArr==1],yMeas[gatedArr==1],zMeas[gatedArr==1])) #stack the x and y measurements
+        
         
         abs_det = abs(np.linalg.det(2*math.pi*S)) #term used to get the likelihood ratio 
         #T =   1/(  ((2*math.pi)**(m/2)) *math.sqrt(abs_det_S))
@@ -986,12 +1019,23 @@ def getAngle(xVec,sensorPos): #obtains the angle from the radar measurement mode
     
     return theta
 
-def obtain_Jacobian_H(xVec,sensorPos): #obtains the Jacobian of the radar measurement model
-    #Inputs: xVec = state vector
-    #       sensorPos = position of radar
+def getRangeRate(xVec,sensorPos):
+    xS = sensorPos[0] #X and Y coordinates of sensor
+    yS = sensorPos[1]
     
-    #Outputs: H = Jacobian of measurement model
+    x_k = xVec[0] #X and Y position of target
+    y_k = xVec[1]
+    vx_k = xVec[2]
+    vy_k =xVec[3]
+    
+    R = getRange(xVec,sensorPos)
+    
+    rDot = (vx_k*(x_k-xS) + vy_k*(y_k-yS))/R
+    
+    return rDot
 
+
+def obtain_Jacobian_H(xVec,sensorPos, includeVel):
     n = xVec.shape[0] #number of states
     
     xS = sensorPos[0] #X and Y coordinates of sensor
@@ -999,22 +1043,40 @@ def obtain_Jacobian_H(xVec,sensorPos): #obtains the Jacobian of the radar measur
     
     x_k = xVec[0] #X and Y position of target
     y_k = xVec[1]
+    vx_k = xVec[2]
+    vy_k =xVec[3]
     
-    m = 2 #number of measurements
+    if includeVel == True:
+        m=3
+    else:
+        m = 2 #number of measurements
     
     H = np.zeros((m,n)) #allocate Jacobian matrix
     
     #obtain Jacobian matrix entries
-    #denomTerm = math.sqrt((x_k-xS)**2 + (y_k-yS)**2)
-    #denomTermSqr = denomTerm**2
-    
     R = getRange(xVec,sensorPos)
+    #denomTerm = sqrt((x_k-xS)**2 + (y_k-yS)**2)
+    #denomTermSqr = denomTerm**2
 
-    #compute entries of Jacobian
     H[0,0] = (x_k-xS)/R
     H[0,1] = (y_k-yS)/R
+    
     H[1,0] = -(y_k-yS)/(R**2)
     H[1,1] = (x_k-xS)/(R**2)
+    
+    if includeVel == True:
+        rDot = getRangeRate(xVec, sensorPos)
+        
+        H[2,0]=-((yS - y_k)*(vy_k*xS - vy_k*x_k - vx_k*yS + vx_k*y_k))/((xS - x_k)**2 + (yS - y_k)**2)**(3/2)
+        H[2,1]=((xS - x_k)*(vy_k*xS - vy_k*x_k - vx_k*yS + vx_k*y_k))/((xS - x_k)**2 + (yS - y_k)**2)**(3/2)
+        H[2,2]=-(xS - x_k)/((xS - x_k)**2 + (yS - y_k)**2)**(1/2)
+        H[2,3]=-(yS - y_k)/((xS - x_k)**2 + (yS - y_k)**2)**(1/2)
+
+
+        #H[2,0] = (vx_k/R) - ((x_k-xS)/(R**3))*rDot
+        #H[2,1] = (vy_k/R) - ((y_k-yS)/(R**3))*rDot
+        #H[2,2] = (x_k-xS)/R
+        #H[2,3] = (y_k-yS)/R
     
     return H
 

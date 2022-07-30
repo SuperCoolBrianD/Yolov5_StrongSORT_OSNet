@@ -28,21 +28,32 @@ totalTime = 200 #total duration of simulation
 numTargets = 2#number of targets
 
 #Parameters
-Ts = 1 #sampling time
-sigma_w = 10 #measurement noise standard deviation in position
+Ts = .1 #sampling time
+
+sigma_w = 10 #measurement noise standard deviation for position sensor
 sigmaVel = (1/(Ts**2))*math.sqrt(sigma_w**2  + sigma_w**2) #velocity measurement standard deviation
 sigmaOmega = .05
-sigma_v = 1E-1 #process noise standard deviation
+sigma_v = 1E-3 #process noise standard deviation
 L1 = .16
 L2 = .06
 sigma_v_filt = sigma_v #process noise standard deviation for filter
-maxVel = 10 #for initializing velocity variance for 1-point initialization
+
+#Sensor parameters
+sensor = "Radar" #sensor type
+sensorPos = np.array([0,0]) #position of radar sensor 
+rangeStd = .5 #standard deviation of range for radar
+angleStd = math.radians(1) #standard deviation of angle for radar
+rDotStd = 1
+includeVel = False #Set to True if the radial velocity will be included as a measurement
+
+#1-point initialization parameers
+maxVel = 20#for initializing velocity variance for 1-point initialization
 maxAcc = 0
 omegaMax = math.radians(0) #for initializing turn-rate variance for 1-point initialization
 maxVals = [maxVel,maxAcc,omegaMax]
+
 numRuns =100#number of Monte Carlo Runs
 N = int(totalTime/Ts) #number of samples in the timulation
-
 t = np.arange(0,totalTime,Ts) #time vector for simulation for plotting
 
 #Parameters for tracking in clutter
@@ -52,38 +63,36 @@ PD = .8#probability of target detection in a time step
 PG = .9979 #gate probability
 regionWidth = 100 #width of the clutter region surrounding a target
 regionLength = 100 #length of the clutter region surrounding a target
-thetaLims = [-math.pi,math.pi]
-rangeLims = [0,10000]
-pInit = .2 #initial probability of track existence
+thetaLims = [-math.pi,math.pi] #limits for the angles of the radar
+rangeLims = [0,1000] #limits for the range of the radar
+rDotLims = [1,20] #limits for the radial velocity/ range rate
 
+#IDPA parameters
+pInit = .2 #initial probability of track existence
 P_ii = .999 #for Markov matrix of IPDA
 MP = np.array([[P_ii,1-P_ii],[1-P_ii,P_ii]]) #Markov matrix for IPDA
 
-#Parameters for track management
-
-useLogic=True
 delTenThr = .05; #threshold for deleting a tenative track
 confTenThr = .9; #threshold for confirming a tenative track
 delConfThr = 0.005; #threshold for deleting a confirmed track
 
 #For M/N logic based track management
+useLogic=False
 N1 = 3
 M2 = 3
 N2 = 6
 N3 = 5
 
-errThr = 4000#threshold for error cases in which the track is lost
-errThr2 = 1200
+#errThr = 4000#threshold for error cases in which the track is lost
+#errThr2 = 1200
+
+errThr = 100
+errThr2 = 100
 numErrCases = 0 #counts the number of error cases
 
 #Parameter for prediction
 predTraj = False
 tP = 7
-
-sensorPos = np.array([1000,500]) #position of radar sensor 
-sensor = "Radar" #sensor type
-rangeStd = 10 #standard deviation of range for radar
-angleStd = .01 #standard deviation of angle for radar
 
 Q_CV = np.diag([sigma_v**2,sigma_v**2,0]) #process noise co-variance for CV model
 Q_CA = np.diag([sigma_v**2,sigma_v**2,0]) #process noise co-variance for CV model
@@ -91,7 +100,7 @@ Q_CT = np.diag([sigma_v**2,sigma_v**2, sigma_v**2]) #process noise co-variance f
 
 #For generating the trajectory of the 1st remote car, 7 variables below are required to obtain the ground truth trajectory
 #x0_Target1 = np.array([0,0,27,27,0.5,0.5, math.radians(0)]) #initial state for the 1st target
-x0_Target1 = np.array([6000,5000,-10,-10,0,0,0])
+x0_Target1 = np.array([5,5,10,10,0,0,0])
 covListTarget1 = Q_CV #each entry is the process noise co-variance for each segment
 xVelListTarget1 = 0 #if the velocity has to change to a specific value in a segment, change that
 yVelListTarget1 = 0
@@ -115,7 +124,7 @@ N_t1 = t1_endSample-t1_startSample+1 #number of samples for the period in which 
 
 #For 2nd remote car
 #x0_Target2 = np.array([-100,-100,-25,-25,-0.5,-0.5, math.radians(0)])
-x0_Target2 = np.array([2000,2000,-10,-10,0,0, math.radians(0)])
+x0_Target2 = np.array([-10,-10,-10,-10,0,0, math.radians(0)])
 covListTarget2 = Q_CV
 xVelListTarget2 = 0
 yVelListTarget2 = 0
@@ -172,6 +181,9 @@ else: #if the number of measurements is less than the number of states
     if sensor=="Radar":
         R = np.diag(np.array([rangeStd**2,angleStd**2])) #if radar, use this measurement co-variance
         H = 0
+        
+        if includeVel == True:
+            R = np.diag(np.array([rangeStd**2,angleStd**2,rDotStd**2])) #if radar, use this measurement co-variance
     else:
         R = np.diag(np.array([sigma_w**2,sigma_w**2])) #measurement co-variance
         H = np.array([[1,0,0,0,0,0,0],[0,1,0,0,0,0,0]]) #measurement matrix
@@ -348,7 +360,7 @@ numErrCasesT2=0
 
 #Tracking Loop
 for ii in range(numRuns): #for each Monte Carlo run
-    trackList = [0]*8000 #allocate track list, a list of objects
+    trackList = [0]*50000 #allocate track list, a list of objects
     lastTrackIdx = -1 #index of a track in the list,
 
     if t1_start == 0 or t2_start==0: #if the any target exists at the initial frame/sample, obtain their measurement
@@ -371,6 +383,10 @@ for ii in range(numRuns): #for each Monte Carlo run
             z0[0] = rangeMeas0
             z0[1] = angleMeas0
             
+            if includeVel==True:
+                rDot0 = getRangeRate(x0_Target1,sensorPos)
+                z0[2] = rDot0 + np.random.normal(0,rDotStd,1)
+
             P_Post0 = np.zeros((n,n))
             
             lambda1 = math.exp(-(angleStd**2)/2)
@@ -392,7 +408,10 @@ for ii in range(numRuns): #for each Monte Carlo run
             P_Post0[3,3] = (maxVel/2)**2
             P_Post0[6,6] = (omegaMax/2)**2
             
-            ePost0 = z0 - np.array([r0,angle0])
+            if includeVel==True:
+                ePost0 = z0- np.array([r0,angle0,rDot0])
+            else:
+                ePost0 = z0 - np.array([r0,angle0])
         else: #for Lidar case
             if m!=n: #if m<n, generate initial measurement of the target
                 z0 = H@x0 + np.random.multivariate_normal(np.array([0,0]),R)
@@ -406,7 +425,6 @@ for ii in range(numRuns): #for each Monte Carlo run
         lastTrackIdx=lastTrackIdx+1
         
     if sensor=="Lidar":
-    
         #initial clutter points in the specified coverage regions
         xMin = x_01[0] - round(regionWidth/2) # x range of region around target 1, x_01[0] is the initial X position, x_01[1] is the initial Y position
         xMax = x_01[0] + round(regionWidth/2)
@@ -427,12 +445,14 @@ for ii in range(numRuns): #for each Monte Carlo run
         xLims2 = [xMin,xMax] #info for the coverage region around target 2
         yLims2 = [yMin,yMax]
         
-        clutterPoints1 = generateClutter(xLims1, yLims1, lambdaVal) #generate clutter around target 1
-        clutterPoints2 = generateClutter(xLims2, yLims2, lambdaVal) #generate clutter around target 2
+        clutterPoints1 = generateClutter(xLims1, yLims1,[], lambdaVal) #generate clutter around target 1
+        clutterPoints2 = generateClutter(xLims2, yLims2,[], lambdaVal) #generate clutter around target 2
         unassignedMeas0 = np.hstack((clutterPoints1,clutterPoints2)) #full set of unassigned measurements
     else:
-        clutterPoints = generateClutter(rangeLims, thetaLims, lambdaVal) #generate clutter around target 1
-        #clutterPoints2 = generateClutter(rangeLims, thetaLims, lambdaVal) #generate clutter around target 2
+        if includeVel == True:
+            clutterPoints = generateClutter(rangeLims, thetaLims, rDotLims, lambdaVal) #generate clutter around target 1
+        else:
+            clutterPoints = generateClutter(rangeLims, thetaLims, [], lambdaVal) #generate clutter around target 1
         unassignedMeas0 = clutterPoints #full set of unassigned measurements
     
     #initial tracks, each unassigned measurement initiate a track
@@ -472,8 +492,11 @@ for ii in range(numRuns): #for each Monte Carlo run
                         z_k = np.zeros((m,))
                         z_k[0] = rangeMeas
                         z_k[1] = angleMeas
-                    else:
                         
+                        if m==3:
+                            rDotMeas = getRangeRate(x_k, sensorPos) + np.random.normal(0,rDotStd,1)
+                            z_k[2] = rDotMeas
+                    else:
                         #for lidar
                         if m==n: #for using S.A. Gadsden's SVSF
                             z_kPos = H[0:2,0:2]@x_k[0:2] + np.random.normal(0,sigma_w,2)
@@ -550,7 +573,7 @@ for ii in range(numRuns): #for each Monte Carlo run
                     xLims = [xMin,xMax]
                     yLims = [yMin,yMax]
                     
-                    clutterPoints = generateClutter(xLims, yLims, lambdaVal) #generate clutter points
+                    clutterPoints = generateClutter(xLims, yLims,[], lambdaVal) #generate clutter points
                     if i==0:
                         clutterPoints1 = clutterPoints #clutter points around target 1
                     else:
@@ -561,7 +584,11 @@ for ii in range(numRuns): #for each Monte Carlo run
                 else: #if no target is detected
                     measSet = np.hstack((clutterPoints1,clutterPoints2)) #full set of measurements
             elif sensor=="Radar":
-                clutterPoints = generateClutter(rangeLims, thetaLims, lambdaVal) #generate clutter points
+                
+                if includeVel==True:
+                    clutterPoints = generateClutter(rangeLims, thetaLims,rDotLims, lambdaVal) #generate clutter points
+                else:
+                    clutterPoints = generateClutter(rangeLims, thetaLims,[], lambdaVal) #generate clutter points
                 
                 if isinstance(targetMeas, list)==False: #if a target is detected
                     measSet = np.hstack((clutterPoints,targetMeas)) #full set of measurements

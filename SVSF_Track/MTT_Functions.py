@@ -184,7 +184,7 @@ def getRangeRate(xVec,sensorPos):
     
     R = getRange(xVec,sensorPos)
     
-    rDot = (vx_k*(x_k-xS) + vy_k*(y_k-yS))
+    rDot = (vx_k*(x_k-xS) + vy_k*(y_k-yS))/R
     
     return rDot
     
@@ -219,11 +219,11 @@ def obtain_Jacobian_H(xVec,sensorPos, includeVel):
     H[1,1] = (x_k-xS)/(R**2)
     
     if includeVel == True:
-        rDot = getRangeRate(xVec, sensorPos)
-        H[2,0] = (vx_k/R) - ((x_k-xS)/(R**3))*rDot
-        H[2,1] = (vy_k/R) - ((y_k-yS)/(R**3))*rDot
-        H[2,2] = (x_k-xS)/R
-        H[2,3] = (y_k-yS)/R
+       # rDot = getRangeRate(xVec, sensorPos)
+        H[2,0]=-((yS - y_k)*(vy_k*xS - vy_k*x_k - vx_k*yS + vx_k*y_k))/((xS - x_k)**2 + (yS - y_k)**2)**(3/2)
+        H[2,1]=((xS - x_k)*(vy_k*xS - vy_k*x_k - vx_k*yS + vx_k*y_k))/((xS - x_k)**2 + (yS - y_k)**2)**(3/2)
+        H[2,2]=-(xS - x_k)/((xS - x_k)**2 + (yS - y_k)**2)**(1/2)
+        H[2,3]=-(yS - y_k)/((xS - x_k)**2 + (yS - y_k)**2)**(1/2)
     
     return H
 
@@ -318,7 +318,7 @@ def generateTrajectory(x0,modelList, xVelList, yVelList, xAccList, yAccList, ome
                 
     return trueTraj, outputVec, t_0
 
-def generateClutter(xLims,yLims,lambdaVal):
+def generateClutter(xLims,yLims,zLims,lambdaVal):
     #generates clutter points in a specific region specified by xLims and yLims
     
     #Inputs: xLims = limits for the x range in the coverage region
@@ -329,15 +329,23 @@ def generateClutter(xLims,yLims,lambdaVal):
     xMax = xLims[1] #max. x value in the region
     yMin = yLims[0] #min. y value in the region
     yMax = yLims[1] #max. y value in the region
-
-    Vol = (xMax-xMin)*(yMax-yMin) #volume of the region
     
+    if len(zLims)==0:
+        Vol = (xMax-xMin)*(yMax-yMin)
+    else:
+        zMin = zLims[0]
+        zMax = zLims[1]
+        Vol = (xMax-xMin)*(yMax-yMin)*(zMax-zMin)
     numPoints = np.random.poisson(Vol*lambdaVal) #number of points generated from a Poisson distributed
     
     xPoints = np.random.uniform(xMin,xMax+1,numPoints) #uniformly generate the random x points
     yPoints = np.random.uniform(yMin,yMax+1,numPoints) #uniformly generate the random y points
     
-    clutterMeas = np.vstack((xPoints,yPoints)) #stack the points to create a array of 2D points
+    if len(zLims)!= 0:
+        zPoints = np.random.uniform(zMin,zMax+1,numPoints)
+        clutterMeas = np.vstack((xPoints,yPoints,zPoints))
+    else:
+        clutterMeas = np.vstack((xPoints,yPoints))
     
     return clutterMeas
 
@@ -347,6 +355,7 @@ def gating(trackList,lastTrackIdx,PG, MP, maxVals,sensorPos,measSet,k):
     #numTracks = len(trackList)
     numTracks = lastTrackIdx +1 #total number of tracks to this point
     numMeas = measSet.shape[1] #number of measurements
+    m = measSet.shape[0]
     
     gateMat = np.zeros((numTracks,numMeas)) #binary matrix, the index of the row specifies a track, the column specifies the measurement
     for i in range(numTracks): #for each track
@@ -409,7 +418,11 @@ def gating(trackList,lastTrackIdx,PG, MP, maxVals,sensorPos,measSet,k):
     nonGatedIdx = np.nonzero(sumGateMat==0) #indices of measurements not gated
     
     unassignedMeas = measSet[:,nonGatedIdx] #obtain the measurements not gated, also known as unassigned measurements
-    unassignedMeas = np.vstack((measSet[:,nonGatedIdx][0],measSet[:,nonGatedIdx][1]))
+    
+    if m==2:
+        unassignedMeas = np.vstack((measSet[:,nonGatedIdx][0],measSet[:,nonGatedIdx][1]))
+    else:
+        unassignedMeas = np.vstack((measSet[:,nonGatedIdx][0],measSet[:,nonGatedIdx][1],measSet[:,nonGatedIdx][2]))
     
     return trackList, unassignedMeas, measSet
 
@@ -472,12 +485,21 @@ def gatingSingle(xPost,P_Post,G,H,Q,R,PG,Ts,modelType,sensorPos,sensor,measSet):
         rangePred = getRange(xPred,sensorPos) #predict measurement using non-linear model
         anglePred = getAngle(xPred,sensorPos)
         
-        m=2
+        m=R.shape[0]
         zPred = np.zeros((m,))
         zPred[0] = rangePred #store into a vector
         zPred[1] = anglePred
         
-        H = obtain_Jacobian_H(xPred, sensorPos,False) #obtain Jacobian matrix
+        if m==3:
+            rDotPred = getRangeRate(xPred, sensorPos)
+            zPred[2] = rDotPred
+        
+        if m==2:
+            includeVel = False
+        else:
+            includeVel = True
+            
+        H = obtain_Jacobian_H(xPred, sensorPos,includeVel) #obtain Jacobian matrix
     else: #if LIDAR
         zPred = H@xPred 
 
