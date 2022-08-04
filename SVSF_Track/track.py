@@ -11,7 +11,7 @@ from scipy import linalg
 
 
 class track:
-    def __init__(self,z0,G,H,Q,R,maxVel, maxAcc,omegaMax,pInit,startSample,Ts, modelType, sensor,isMM, N):
+    def __init__(self,z0,G,H,Q,R,maxVel, maxAcc,omegaMax,pInit,startSample,Ts, modelType, sensor,isMM, sensorPos, N):
         #initializes track using 1-point initialization
         
         #Inputs: 
@@ -34,12 +34,48 @@ class track:
         
         #apply 1-point initialization
         xPost0 = np.array([z0[0],z0[1],0,0,0,0,0]) #initial state
+
+        if sensor == "Lidar":
+            sigma_x = math.sqrt(R[0, 0])
+            sigma_y = math.sqrt(R[1, 1])
+            P_Post0 = np.diag(np.array([sigma_x ** 2, sigma_y ** 2, (maxVel / 2) ** 2, (maxVel / 2) ** 2, (maxAcc / 2) ** 2, (maxAcc / 2) ** 2, (omegaMax / 2) ** 2]))  # initial co-variance
+        elif sensor == "Radar":
+            rangeStd = math.sqrt(R[0, 0])
+            angleStd = math.sqrt(R[1, 1])
+
+            r0 = z0[0]
+            angle0 = z0[1]
+            rangeMeas0 = r0 + np.random.normal(0, rangeStd, 1)  # obtain radar measurement
+            angleMeas0 = angle0 + np.random.normal(0, angleStd, 1)
+
+            n = xPost0.shape[0]
+            P_Post0 = np.zeros((n, n))
+
+            lambda1 = math.exp(-(angleStd ** 2) / 2)
+            lambda2 = math.exp(-2 * (angleStd ** 2))
+
+            xS = sensorPos[0]
+            yS = sensorPos[1]
+
+            xPos0 = xS + (rangeMeas0 / lambda1) * math.cos(angleMeas0)
+            yPos0 = yS + (rangeMeas0 / lambda1) * math.sin(angleMeas0)
+
+            xPost0 = np.array([xPos0, yPos0, 0, 0, 0, 0, 0])
+
+            P_Post0[0, 0] = (lambda1 ** (-2) - 2) * (rangeMeas0 ** 2) * ((math.cos(angleMeas0)) ** 2) + 0.5 * (
+                        rangeMeas0 ** 2 + rangeStd ** 2) * (1 + lambda2 * math.cos(2 * angleMeas0))
+            P_Post0[1, 1] = (lambda1 ** (-2) - 2) * (rangeMeas0 ** 2) * ((math.sin(angleMeas0)) ** 2) + 0.5 * (
+                        rangeMeas0 ** 2 + rangeStd ** 2) * (1 - lambda2 * math.cos(2 * angleMeas0))
+            P_Post0[0, 1] = (lambda1 ** (-2) - 2) * (rangeMeas0 ** 2) * (
+                        math.cos(angleMeas0) * math.sin(angleMeas0)) + 0.5 * (
+                                        rangeMeas0 ** 2 + rangeStd ** 2) * lambda2 * math.sin(2 * angleMeas0)
+            P_Post0[1, 0] = P_Post0[0, 1]
+            P_Post0[2, 2] = (maxVel / 2) ** 2
+            P_Post0[3, 3] = (maxVel / 2) ** 2
+            P_Post0[6, 6] = (omegaMax / 2) ** 2
         
-        sigma_x = math.sqrt(R[0,0])
-        sigma_y = math.sqrt(R[1,1])
         
-        
-        P_Post0 = np.diag(np.array([sigma_x**2,sigma_y**2,(maxVel/2)**2,(maxVel/2)**2,(maxAcc/2)**2,(maxAcc/2)**2,(omegaMax/2)**2])) #initial co-variance
+#        P_Post0 = np.diag(np.array([sigma_x**2,sigma_y**2,(maxVel/2)**2,(maxVel/2)**2,(maxAcc/2)**2,(maxAcc/2)**2,(omegaMax/2)**2])) #initial co-variance
         
         #properties of track
         self.xPost = xPost0
@@ -56,6 +92,12 @@ class track:
         self.H = H
         self.G = G
         self.pCurrent = pInit
+        self.latency = -1
+        self.numMisses = 0
+        self.n_k = 1
+        self.m_k = 1
+        self.mBar_k = 0
+        self.idx = 0
         
         n = xPost0.shape[0] #dimension of state vector
         xEsts = np.zeros((n,N)) #array of state estimates initialized 
@@ -63,10 +105,13 @@ class track:
         BLs = np.zeros((n,N)) #BL widths
         
         xEsts[:,startSample] = xPost0 #store initial state at the starting sample/scan/frame
-        ePost0 = z0 - H@xPost0 #a-posteriori measurement error required for SVSF
-        
-        self.ePost = ePost0 #set ePost as a property
-        self.xEsts = xEsts #estimated states is also a property
+
+        if sensor == "Lidar":
+            ePost0 = z0 - H @ xPost0  # a-posteriori measurement error required for SVSF
+        elif sensor == "Radar":
+            ePost0 = z0 - np.array([getRange(xPost0, sensorPos), getAngle(xPost0, sensorPos)])
+        self.ePost = ePost0  # set ePost as a property
+        self.xEsts = xEsts  # estimated states is also a property
         self.BLs = BLs
                 #uses the KF to update the state of a track
         
@@ -472,7 +517,7 @@ class track:
         H_1 = H[0:m,0:m] #sub-matrix of measurement matrix
         
         ePred = nu_k #a-priori measurement error set to combined innovation
-        ePred[ePred==0] = 1E-1000
+        ePred[ePred==0] = 1E-10000
         
         Psi_k = T_mat@F_k @linalg.inv(T_mat) #perform transformation
 
@@ -506,7 +551,7 @@ class track:
                     Kl = P_Pred_21@H_1.T@S_inv #KF lower gain
                 else:
                     Kl = np.diag(E_y * sat(M @ePred,psiY)) @ linalg.pinv(np.diag(M@ePred)) @ M #CMSVSF lower gain
-                    print('SVSF')
+                    #print('SVSF')
             elif modelType=="CT":
                 if psiY_opt[0,0] <psiY[0] and psiY_opt[1,1] < psiY[1] and psiY_opt[2,2] < psiY[2]:
                     Kl = P_Pred_21@H_1.T@S_inv #KF lower gain
@@ -517,7 +562,7 @@ class track:
                     Kl = P_Pred_21@H_1.T@S_inv #KF lower gain
                 else:
                     Kl = np.diag(E_y * sat(M @ePred,psiY)) @ linalg.pinv(np.diag(M@ePred)) @ M #CMSVSF lower gain
-                    print('SVSF')
+                    #print('SVSF')
             #K = np.block([Ku,Kl]).T #stacked gain
             K = np.vstack((Ku,Kl))      
             P_c = P_Pred - K@H@P_Pred - P_Pred@H.T@K.T + K@S@K.T #update covariance

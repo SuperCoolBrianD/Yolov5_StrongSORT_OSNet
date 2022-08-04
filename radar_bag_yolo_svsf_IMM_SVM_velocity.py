@@ -74,7 +74,7 @@ unassignedMeas0 = np.array([[]])
 modelType = 'CT' #model used for single model filters
 sensorType = 'Lidar'
 #filterType = "IPDAKF"
-filterType = "IMMIPDAKF"
+filterType = "IPDAKF"
 #filterType = "IMMPDAGVBLSVSF"
 # filterType = "IPDASVSF"
 sensorPos = np.array([0, 0])
@@ -105,21 +105,29 @@ SVSFParams = [psiZ,psiY,gammaZ,gammaY,T_mat]
 sigma_v = 1E-1#process noise standard deviation
 sigma_v_filt = sigma_v #process noise standard deviation for filter
 sigma_w = .5 #measurement noise standard deviation in position
-
+sigma_r = .5
+sigma_theta = math.radians(1)
+sigma_rdot = 1
 # Process noise covariances
 Q_CV = np.diag([sigma_v**2,sigma_v**2,0]) #process noise co-variance for CV model
 Q_CA = np.diag([sigma_v**2,sigma_v**2,0]) #process noise co-variance for CA model
 Q_CT = np.diag([sigma_v**2,sigma_v**2, (5*sigma_v)**2]) #process noise co-variance for CT model
 
-R = np.diag(np.array([sigma_w ** 2, sigma_w ** 2]))  # measurement co-variance
-H = np.array([[1, 0, 0, 0, 0, 0, 0], [0, 1, 0, 0, 0, 0, 0]])  # measurement matrix
 
-#Input gain matrices
+if sensorType == 'Radar':
+    R = np.diag(np.array([sigma_r ** 2, sigma_theta ** 2, sigma_rdot ** 2]))  # measurement co-variance
+    H = 0
+else:
+    R = np.diag(np.array([sigma_w ** 2, sigma_w ** 2]))  # measurement co-variance
+    H = np.array([[1, 0, 0, 0, 0, 0, 0], [0, 1, 0, 0, 0, 0, 0]])  # measurement matrix
+
+
+# Input gain matrices
 G_CV = np.array([[(Ts**2)/2, 0,0],[0, (Ts**2)/2,0],[Ts,0,0],[0,Ts,0],[0,0,0],[0,0,0],[0,0,0]])  #input gain for CV
 G_CA = np.array([[(Ts**2)/2, 0,0],[0, (Ts**2)/2,0],[Ts,0,0],[0,Ts,0], [1,0,0],[0,1,0],[0,0,0]]) #input gain for CA
 G_CT = np.array([[(Ts**2)/2, 0,0],[0, (Ts**2)/2,0],[Ts,0,0],[0,Ts,0],[0,0,0],[0,0,0],[0,0,Ts]]) #input gain for CT
 
-#Parameters for 1-point initialization
+# Parameters for 1-point initialization
 maxAcc = 2
 maxVel = 25 #for initializing velocity variance for 1-point initialization
 omegaMax = math.radians(4) #for initializing turn-rate variance for 1-point initialization
@@ -134,7 +142,7 @@ lambdaVal = 0.05 # parameter for clutter density
 
 useLogic= False
 delTenThr = .05/50 #threshold for deleting a tenative track
-confTenThr = .6 # threshold for confirming a tenative track/
+confTenThr = .1 # threshold for confirming a tenative track/
 delConfThr = 0.01/10 # threshold for deleting a confirmed track
 
 #For M/N logic based track management
@@ -314,11 +322,6 @@ start_list = [-1] * 8000
 end_list = [-1] * 8000
 prev_track_list = [-1] * 8000
 unconfirmed_track = 0
-road_objects_c = []
-road_objects_r = []
-road_objects_dict = dict()
-radar_id_count = 0
-radar_ids = [-1]
 def animate(g):
     global image_np
     global framei
@@ -359,7 +362,7 @@ def animate(g):
     global c_list, pts_list
     global broken_radar_track, unconfirmed_track
     global path, zone_2, zone_1
-    global start_list, prev_track_list, road_objects_c, road_objects_r, road_objects_dict, radar_id_count, radar_ids
+    global start_list, prev_track_list
     if idx <= 0:
         i = next(bg)
         # read ros Topic camera or radar
@@ -433,11 +436,9 @@ def animate(g):
             detection_list = []
 
             if run_cam_d:
-                _, _, C_M, camera_detection, outputs = process_track(image_np, i, curr_frames, prev_frames, outputs,
+                _, _, im0, camera_detection, outputs = process_track(image_np, i, curr_frames, prev_frames, outputs,
                                                      device, model, stride, names, pt, imgsz, cfg, strongsort_list, dt,
-                                                     seen, half, classes=[2])
-                # [5, 7, 0, 2]
-                im0 = image_np.copy()
+                                                     seen, half, classes=[5, 7, 0, 2])
             if cls:
 
                 # for ii, jj in enumerate(cls):
@@ -462,7 +463,10 @@ def animate(g):
                     box2d = [box2d[0][0], box2d[0][1], box2d[1][0], box2d[1][1]]
                     box2d = convert_topy_bottomx(box2d)
                     radar_detection.append([cc, centroid, bbox, box2d])
-                measSet = measSet[:, :2].T
+                if sensorType == 'Radar':
+                    p_measSet = convert_polar(measSet)
+                elif sensorType == 'Lidar':
+                    p_measSet = measSet[:, :2].T
                 features = scaler_model.fit_transform(features)
                 prediction = svm_model.predict_proba(features)
                 for ii in range(len(cls)):
@@ -498,16 +502,22 @@ def animate(g):
             elif camera_detection:
                 # initiate empty radar measurement if no object is detected on radar
                 # initiate all detections for camera
-                measSet = np.empty((2, 0))
+                if sensorType == 'Radar':
+                    p_measSet = np.empty((3, 0))
+                else:
+                    p_measSet= np.empty((2, 0))
                 for ii in camera_detection:
                     detection_list.append(DetectedObject(c_d=ii))
             else:
                 # initiate measurement if no object is detected in both camera and radar
-                measSet = np.empty((2, 0))
+                if sensorType == 'Radar':
+                    p_measSet = np.empty((3, 0))
+                else:
+                    p_measSet = np.empty((2, 0))
             # perform tracking
-            trackList, unassignedMeas = gating(trackList, lastTrackIdx, PG, MP_IMM, maxVals, sensorPos, measSet, k)
+            trackList, unassignedMeas = gating(trackList, lastTrackIdx, PG, MP_IMM, maxVals, sensorPos, p_measSet, k)
             # perform gating
-            trackList = updateStateTracks(trackList, lastTrackIdx, filterType, measSet, maxVals,
+            trackList = updateStateTracks(trackList, lastTrackIdx, filterType, p_measSet, maxVals,
                                           lambdaVal, MP_IPDA, PG, PD, sensorPos, SVSFParams, k)
             # update the state of each track
             # trackList = updateTracksStatus(trackList,lastTrackIdx, delTenThr, delConfThr, confTenThr,k)
@@ -526,21 +536,13 @@ def animate(g):
                                                            Q_List, R, models, filters, Ts, pInit, k, sensorType,
                                                            sensorPos, N)
             else:
-                trackList, lastTrackIdx = initiateTracks(trackList, lastTrackIdx, measSet, maxVel, maxAcc, omegaMax, G,
+                trackList, lastTrackIdx = initiateTracks(trackList, lastTrackIdx, p_measSet, maxVel, maxAcc, omegaMax, G,
                                                          H, Q, R, modelType, Ts, pInit, k, sensorType, sensorPos, N)
-
             # iterate through all tracks
             # ToDo change tracklet format so it doesn't need to iterate through all previous tracks
             # print('_____________________________________')
             # print(f'{k=}')
-            camera_ids = [ii[2] for ii in camera_detection]
-            for ii in camera_ids:
-                if ii not in road_objects_dict.keys():
-                    # index 0 is for counting radarID, index 1 is for storing index in trackList
-                    road_objects_dict[ii] = [[], [], 0]
-                else:
-                    road_objects_dict[ii][2] += 1
-            matched_cameras = []
+            radar_current = []
             for jj, ii in enumerate(trackList[:lastTrackIdx]):
                 # print(ii.BLs)
                 # get centroid
@@ -549,12 +551,12 @@ def animate(g):
                 centroid = ii.xPost[:2]
 
                 track_label = None
-                if not ii.endSample and ii.status == 2:
+                if not ii.endSample and (ii.status == 2):
+                    axs.text(centroid[0], centroid[1] - 2, 'ID: ' + str(jj), fontsize=11,
+                             color='r')
+                    radar_current.append(ii)
                     if start_list[jj] == -1:
-
-                        ii.ID = max(radar_ids) + 1
-                        radar_ids.append(ii.ID)
-                        radar_id_count += 1
+                        car_count+=1
                         if zone_1.contains_points(centroid.reshape(1, -1)):
                             zone = 1
                         elif zone_2.contains_points(centroid.reshape(1, -1)):
@@ -562,10 +564,8 @@ def animate(g):
                         else:
                             zone = 0
                         start_list[jj] = [k, zone]
-                    axs.text(centroid[0], centroid[1] - 2, 'ID: ' + str(ii.ID), fontsize=11,
-                             color='r')
+
                     speed = np.sqrt(ii.xPost[2] ** 2 + ii.xPost[3] ** 2) * 3.6
-                    ii.speed = speed
                     v = ii.xPost[3], ii.xPost[2]
                     angle = math.atan2(ii.xPost[3], ii.xPost[2])
                     x1 = math.cos(angle) * 5 + centroid[0]
@@ -584,40 +584,21 @@ def animate(g):
                     s_pts = project_to_image(s_img.T, r2c).flatten()
                     matched_measurement = match_measurement(detection_list, centroid)
                     if matched_measurement:
-                        if detection_list[matched_measurement].cam_id!= None:
-                            ii.c_ID.append(detection_list[matched_measurement].cam_id)
-                        detection_list[matched_measurement].rad_id = ii.ID
+                        detection_list[matched_measurement].rad_id = jj
                         tracked_list[jj].dets.append(detection_list[matched_measurement])
-                        tracked_list[jj].start = k
-                    if ii.c_ID:
-                        c_track_id = max(ii.c_ID, key=ii.c_ID.count)
-                        matched_cameras.append(c_track_id)
-                        if jj not in road_objects_dict[c_track_id][1]:
-                            road_objects_dict[c_track_id][0].append(ii.ID)
-                            road_objects_dict[c_track_id][1].append(jj)
-                    else:
-                        c_track_id = None
+                        tracked_list[jj].start = jj
 
 
                     # axs.plot([centroid[0], x1], [centroid[1], y1], linewidth=2, markersize=5)
-                    if c_track_id and c_track_id in road_objects_c:
-                        old_radar = road_objects_r[road_objects_c.index(c_track_id)]
-                        print(f"{old_radar=}, track_ID={jj}")
-                        # ii.ID = old_radar
-
-                    cv2.putText(im0, f'Radar_id: {ii.ID}', (
+                    cv2.putText(im0, f'Radar_id: {jj}', (
                     int(pts[0] + 10), int(pts[1])-10),
                                 cv2.FONT_HERSHEY_SIMPLEX,
                                 0.5, (0, 255, 0), 1, cv2.LINE_AA)
-                    cv2.putText(im0, f'camera_id: {c_track_id}', (
-                    int(pts[0] + 10), int(pts[1])+20),
-                                cv2.FONT_HERSHEY_SIMPLEX,
-                                0.5, (0, 255, 0), 1, cv2.LINE_AA)
-
-                    cv2.putText(im0, f'Speed: {speed:.03g}km/h', (
-                    int(pts[0]) + 10, int(pts[1])+3),
-                                cv2.FONT_HERSHEY_SIMPLEX,
-                                0.5,  (0, 255, 0), 1, cv2.LINE_AA)
+                    #
+                    # cv2.putText(im0, f'Speed: {speed:.03g}km/h', (
+                    # int(pts[0]), int(pts[1])),
+                    #             cv2.FONT_HERSHEY_SIMPLEX,
+                    #             0.5,  (255, 255, 255), 1, cv2.LINE_AA)
                     cv2.circle(im0, (int(pts[0]), int(pts[1])), 5, color=(0, 255, 0), thickness=2)
                     c_sx = s_pts[0] - pts[0]
                     c_sy = s_pts[1] - pts[1]
@@ -633,7 +614,7 @@ def animate(g):
                             radar_label, num_pts, centroid_track = tracked_list[jj].get_prediction(
                                 camera=run_cam_d)
                         track_label = distance_weighted_voting_custom(radar_label, centroid_track, d_weight)
-                        ii.label = track_label
+
                         # if track_label:
                         #     cv2.putText(im0, f'Radar_label: {classes[int(track_label[0])]}', (
                         #         int(pts[0]), int(pts[1] + 10)),
@@ -646,9 +627,12 @@ def animate(g):
                         #                 0.5, (255, 255, 255), 1, cv2.LINE_AA)
 
                 elif ii.endSample:
+                    tracked_object[jj] = None
+                    alive_track[jj] = False
                     # gather info about the track including camera ID
                     if prev_track_list[jj] == -1:
                         if run_cam_d:
+                            # print(jj)
                             radar_label, r_centroid, num_pts, cam_label, cam_box, cam_id = tracked_list[jj].get_prediction(
                                 camera=run_cam_d)
                             if cam_id:
@@ -665,16 +649,13 @@ def animate(g):
                             radar_label, r_centroid, num_pts = tracked_list[jj].get_prediction(
                                 camera=run_cam_d)
                         track_label = distance_weighted_voting_custom(radar_label, r_centroid, d_weight)
-
-                        if ii.ID and c_track_id:
-                            road_objects_c.append(c_track_id)
-                            road_objects_r.append(ii.ID)
                         if zone_1.contains_points(centroid.reshape(1, -1)):
                             zone = 1
                         elif zone_2.contains_points(centroid.reshape(1, -1)):
                             zone = 2
                         else:
                             zone = 0
+
                         if start_list[jj] != -1:
                             # if object started in zone 1
                             if start_list[jj][1] == 1:
@@ -724,28 +705,22 @@ def animate(g):
                                         picked = track_index
 
                             # print(picked)
-
-
-
-
                         prev_track_list[jj] = [k, zone, c_track_id, track_label, case]
                     else:
                         unconfirmed_track +=1
                         # axs.plot(centroid[0], centroid[1], marker="o", markersize=5)
                         # print(jj)
                         # print(tracked_list[jj].start)
-
-
-                    # tracked_object[jj] = None
-                    alive_track[jj] = False
                     continue
-                # add if first appearance
+                    # add if first appearance
                 if jj not in tracked_object.keys():
                     tracked_object[jj] = radar_object((centroid[0], centroid[1]))
                     alive_track[jj] = True
                 # update if in tracked objects
                 elif jj in tracked_object.keys() and tracked_object[jj]:
                     tracked_object[jj].upd((centroid[0], centroid[1]))
+                # axs.text(centroid[0], centroid[1] - 2, 'ID: ' + str(jj), fontsize=11,
+                #          color='r')
                         # axs.text(centroid[0], centroid[1] - 5, 'Speed: ' + f'{speed*3.6:.2f} km/h', fontsize=11,
                         #          color='r')
                         # axs.text(centroid[0], centroid[1] - 12, 'Prob: ' + f'{pCurrent:.2f}', fontsize=11,
@@ -762,50 +737,11 @@ def animate(g):
                 #         x = [obtk[0] for obtk in tracked_object[tk].tracklet]
                 #         y = [obtk[1] for obtk in tracked_object[tk].tracklet]
                 #         axs.plot(x, y, mew=0)
-                #         if tracked_object[tk].life == 0:
-                #             alive_track.remove(tk)
-            # print(road_objects_c)
-            # print(road_objects_r)
 
 
-            for jj, ii in enumerate(camera_ids):
-                if ii not in matched_cameras:
-                    if road_objects_dict[ii][0]:
-                        radar_id = road_objects_dict[ii][0][-1]
-                        track_index = road_objects_dict[ii][1][-1]
-                        speed = trackList[track_index].speed
-                        bbox = camera_detection[jj][0]
-                        pts = [(bbox[2]-bbox[0])/2 + bbox[0], bbox[3]-10]
-                        cv2.putText(im0, f'Radar_id: {radar_id} (noD)', (
-                            int(pts[0] + 10), int(pts[1]) - 10),
-                                    cv2.FONT_HERSHEY_SIMPLEX,
-                                    0.5, (0, 0, 255), 1, cv2.LINE_AA)
-                        cv2.putText(im0, f'camera_id: {ii}', (
-                            int(pts[0] + 10), int(pts[1]) + 20),
-                                    cv2.FONT_HERSHEY_SIMPLEX,
-                                    0.5, (0, 0, 255), 1, cv2.LINE_AA)
-                        cv2.putText(im0, f'Speed: {speed:.03g}km/h', (
-                            int(pts[0]) + 10, int(pts[1]) + 3),
-                                    cv2.FONT_HERSHEY_SIMPLEX,
-                                    0.5, (0, 0, 255), 1, cv2.LINE_AA)
-                        cv2.circle(im0, (int(pts[0]), int(pts[1])), 5, color=(0, 0, 255), thickness=2)
-                    else:
-                        bbox = camera_detection[jj][0]
-                        pts = [(bbox[2] - bbox[0]) / 2 + bbox[0], bbox[3] - 10]
-                        cv2.putText(im0, f'camera_id: {ii}', (
-                            int(pts[0] + 10), int(pts[1]) + 20),
-                                    cv2.FONT_HERSHEY_SIMPLEX,
-                                    0.5, (0, 0, 255), 1, cv2.LINE_AA)
-                        cv2.putText(im0, f'Radar_id: No Radar', (
-                            int(pts[0] + 10), int(pts[1]) - 10),
-                                    cv2.FONT_HERSHEY_SIMPLEX,
-                                    0.5, (0, 0, 255), 1, cv2.LINE_AA)
-                        cv2.putText(im0, f'Speed: No Radar', (
-                            int(pts[0] + 10), int(pts[1]) + 3),
-                                    cv2.FONT_HERSHEY_SIMPLEX,
-                                    0.5, (0, 0, 255), 1, cv2.LINE_AA)
-
-
+            # for jj, ii in enumerate(radar_current):
+            #     print(ii.xPost)
+            #     centroid = ii.xPost[:, :2]
             # print(f"dt = {i.message.header.stamp.to_sec() - cam_msg}")
             # yolo detection
             # cam1, detection = detect(source=cam1, model=model, device=device, colors=colors, names=names,
@@ -823,20 +759,14 @@ def animate(g):
             # pickle.dump(c_list, open('c_list.pkl', 'wb'))
             # pickle.dump(pts_list, open('pts_list.pkl', 'wb'))
             # print(car_count)
-            # image_np, cam_arr = render_radar_on_image(arr_all, image_np, r2c, 9000, 9000)
+            image_np, cam_arr = render_radar_on_image(arr_all, image_np, r2c, 9000, 9000)
             cv2.imshow('Camera', im0[:, 200:])
-            # cv2.imshow('Camera', image_np)
-            # cv2.imshow('Camera', C_M)
             cv2.waitKey(1)
             k += 1
             update = 1
+            print(lastTrackIdx)
             p_arr_all = arr_all.copy()
             # print(time.time() - ts)
-            car_count = 0
-            for ii in road_objects_dict.keys():
-                if road_objects_dict[ii][2] > 5:
-                    car_count += 1
-            # print(car_count)
 
 
 

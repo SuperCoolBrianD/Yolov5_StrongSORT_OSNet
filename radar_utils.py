@@ -1,6 +1,7 @@
-# import mayavi.mlab as mlab
 import matplotlib
 matplotlib.use('TkAgg')
+# import mayavi.mlab as mlab
+
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
@@ -97,9 +98,9 @@ def cam_radar(rx, ry, rz, tx, ty, tz, c):
     cam_matrix = np.eye(4)
     cam_matrix[:3, :3] = c
     extrinsic = extrinsic_matrix(rx, ry, rz, tx, ty, tz)
-    # print(radar_matrix)
+
     proj_radar2cam = cam_matrix@extrinsic
-    # print(cam_matrix)
+
     return proj_radar2cam
 
 
@@ -454,7 +455,6 @@ class DetectedObject:
             self.cam_rad_iou = None
             self.cam_id = None
             self.rad_id = None
-
         elif r_d and c_d:
             self.cls = r_d[0]
             self.centroid = r_d[1]
@@ -469,16 +469,26 @@ class DetectedObject:
             self.rad_id = None
 
 
+class DetectedObject_old:
+    def __init__(self, cls):
+        self.cls = cls
+        self.cam_rad_iou = None
+        self.rad_label = None
+        self.rad_box = None
+        self.rad_box2d = None
+        self.centroid = None
+        self.rad_id = None
+
 class TrackedObject:
     def __init__(self):
         self.dets=[]
         self.start = None
 
-    def get_prediction(self, camera=False):
+    def get_prediction(self, camera=True):
         if camera:
             cam_label = [i.cam_label for i in self.dets]
             cam_box = [i.cam_box for i in self.dets]
-            cam_id = [i.cam_id for i in self.dets]
+            cam_id = [i.cam_id for i in self.dets if i.cam_id != None]
         r = [i.rad_label for i in self.dets]
         radar_label = np.empty((0, 4))
         for i in r:
@@ -487,10 +497,12 @@ class TrackedObject:
         centroid = np.empty((0, 4))
         for i in c:
             centroid = np.vstack((centroid, i))
+
+        num_pts = [len(i.cls) for i in self.dets]
         if camera:
-            return radar_label, centroid, cam_label, cam_box, cam_id
+            return radar_label, centroid, num_pts, cam_label, cam_box, cam_id
         else:
-            return radar_label, centroid
+            return radar_label, centroid,  num_pts
 
 def timestamp_sync(imgs, t):
     diff = 10000
@@ -641,3 +653,10 @@ def non_max_suppression_fast(boxes, overlapThresh):
     # integer data type
     return pick
 
+
+def convert_polar(m):
+    rg = np.square(m[:, :2])
+    rg = np.sqrt(np.sum(rg, axis=1))
+    theta = np.arctan2(m[:, 1], m[:, 0])
+    measSet = np.vstack((rg, theta, m[:, 3]))
+    return measSet

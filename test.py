@@ -1,10 +1,11 @@
-import math
-
-sy = -4
-sx = -1
-
-
-
-angle = math.atan2(sy, xy)
-x1 = math.cos(angle) * 5 + centroid[0]
-y1 = math.sin(angle) * 5 + centroid[1]
+import numpy as np
+import matplotlib.pyplot as plt
+import pickle
+centroid = pickle.load(open('c_list.pkl', 'rb'))
+num_points = pickle.load(open('pts_list.pkl', 'rb'))
+print(len(num_points))
+print(len(centroid))
+rg = np.square(centroid[:, :2])
+rg = np.sqrt(np.sum(rg, axis=1))
+plt.scatter(rg, num_points, s=1)
+plt.show()

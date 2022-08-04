@@ -1,3 +1,4 @@
+import matplotlib
 import mayavi.mlab as mlab
 import sys
 
@@ -18,7 +19,6 @@ from vis_util import *
 bag = rosbag.Bag("record/working.bag")
 # bag = rosbag.Bag("record/traffic1.bag")
 topics = bag.get_type_and_topic_info()
-
 # old SORT tracker
 # mot_tracker = sort.Sort(min_hits=2, max_age=8, iou_threshold=0.1)
 
@@ -139,7 +139,7 @@ for j, i in enumerate(bag.read_messages()):
 
         if cls:
             for cc in cls:
-                draw_radar(arr_all, fig=fig, pts_scale=0.1, pts_color=(1, 1, 1), view=v)
+                draw_radar(arr_all, fig=fig, pts_scale=0.5, pts_color=(1, 1, 1), view=v)
                 bbox = get_bbox_cls(cc)
                 bbox = get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], 0)
                 draw_gt_boxes3d(bbox, fig=fig)

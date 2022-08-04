@@ -40,7 +40,13 @@ mtx = np.array([[747.9932, 0., 655.5036],
                 [0., 0., 1.]])
 
 
-
+hull = np.array([[ 16.12903226, 118.83116883],
+       [-16.77419355,  23.59307359],
+       [ -0.64516129,  16.23376623],
+       [ 23.87096774,  87.66233766],
+       [ 20.96774194,  95.45454545],
+       [ 34.19354839, 110.60606061],
+        [ 16.12903226, 118.83116883],])
 
 frame = SRS_data_frame()
 p_arr_all = np.array([[0, 0, 0, 0, 0]])
@@ -53,7 +59,9 @@ for j, i in enumerate(bag.read_messages()):
     # print(sensor)
 
     if frame.full_data:
+
         figs, axs = plt.subplots(1, figsize=(6, 6))
+        axs.plot(hull[:, 0], hull[:, 1], 'k-')
         klicker = clicker(axs, ["event"], markers=["x"], **{"linestyle": "--"})
         # print(abs(abs(frame.camera.message.header.stamp.to_sec() - frame.radar.message.header.stamp.to_sec()) - 1))
         # print(frame.camera.message.header.stamp.to_sec() - frame.radar.message.header.stamp.to_sec())
@@ -64,9 +72,11 @@ for j, i in enumerate(bag.read_messages()):
         image_np = imgmsg_to_cv2(frame.camera.message)
         npts = frame.radar.message.width
         arr_all = pc2_numpy(frame.radar.message, npts)
+        arr_non_zero = filter_zero(arr_all)
         axs.set_xlim(-50, 100)
         axs.set_ylim(-50, 150)
-        axs.scatter(arr_all[:, 0], arr_all[:, 1], s=0.5)
+        axs.scatter(arr_all[:, 0], arr_all[:, 1], s=0.5, c='red')
+        axs.scatter(arr_non_zero[:, 0], arr_non_zero[:, 1], s=1)
         plt.show()
         axs.set_xlim(-50, 100)
         axs.set_ylim(-50, 100)

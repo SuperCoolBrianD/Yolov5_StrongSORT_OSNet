@@ -13,7 +13,7 @@ from track import*
 
 
 class track_MM:
-    def __init__(self,z0,G_List,H,Q_List,R,maxVals,pInit,startSample,Ts,models,filters,sensor,N):
+    def __init__(self,z0,G_List,H,Q_List,R,maxVals,pInit,startSample,Ts,models,filters,sensor, sensorPos, N):
         r = len(models) #number of models
         
         sigma_x = sqrt(R[0,0])
@@ -39,7 +39,7 @@ class track_MM:
             Q_i = Q_List[i]
             modelType_i = models[i]
             
-            track_i = track(z0, G_i, H, Q_i, R, maxVel,maxAcc, omegaMax, pInit, startSample, Ts, modelType_i, sensor, isMM, N)
+            track_i = track(z0, G_i, H, Q_i, R, maxVel,maxAcc, omegaMax, pInit, startSample, Ts, modelType_i, sensor, isMM, sensorPos, N)
             modeTrackList[i] = track_i 
             
         n = xPost0.shape[0] #dimension of state vector
@@ -77,6 +77,8 @@ class track_MM:
         self.H = H #measurement matrix
         self.isMM = True#if the tracker applies a multiple model filter
         self.endSample = None
+        self.c_ID = []
+        self.ID = []
         #self.pCurrent = pCurrents
         
     def IMMIPDAKF(self,measSet,MP,PD,PG,lambdaVal,maxVals,sensorPos):

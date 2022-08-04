@@ -324,7 +324,7 @@ def generateClutter(xLims,yLims,lambdaVal):
     return clutterMeas
 
 
-def gating(trackList,lastTrackIdx,PG, MP, maxVals,sensorPos,measSet):
+def gating(trackList,lastTrackIdx,PG, MP, maxVals,sensorPos,measSet,k):
     #takes the measurements obtained from the current time step or frame, then selects them based on the stochastic distance
     
     #numTracks = len(trackList)
@@ -463,7 +463,7 @@ def gatingSingle(xPost,P_Post,G,H,Q,R,PG,Ts,modelType,sensorPos,sensor,measSet):
     return gateArr
  
 
-def initiateTracks(trackList,lastTrackIdx,measSet, maxVel,maxAcc,maxOmega,G,H,Q,R,modelType,Ts,pInit, startSample,sensor,N):
+def initiateTracks(trackList,lastTrackIdx,measSet, maxVel,maxAcc,maxOmega,G,H,Q,R,modelType,Ts,pInit, startSample,sensor,sensorPos,N):
     #initiates a track for each measurement in measSet
     
     isMM = False
@@ -475,13 +475,14 @@ def initiateTracks(trackList,lastTrackIdx,measSet, maxVel,maxAcc,maxOmega,G,H,Q,
             j=j+1 #index of new track
             z_i = measSet[:,i] #ith measurement 
             
-            track_j = track(z_i,G,H,Q,R,maxVel, maxAcc,maxOmega,pInit,startSample,Ts,modelType,sensor,isMM,N) #initiate jth track 
+            track_j = track(z_i,G,H,Q,R,maxVel, maxAcc,maxOmega,pInit,startSample,Ts,modelType,sensor,sensorPos,isMM,N) #initiate jth track
+            track_j.stackState(startSample)
             trackList[j] = track_j #store track at position j in trackList
            
         lastTrackIdx = j #index of last track
     return trackList,lastTrackIdx
 
-def initiateTracksMM(trackList,lastTrackIdx,measSet, maxVals,G_List,H,Q_List,R,models,filters,Ts,pInit, startSample,sensor,N):
+def initiateTracksMM(trackList,lastTrackIdx,measSet, maxVals,G_List,H,Q_List,R,models,filters,Ts,pInit, startSample,sensor,sensorPos,N):
     #initiates a track for each measurement in measSet
     
     numMeas = measSet.shape[1]
@@ -493,7 +494,7 @@ def initiateTracksMM(trackList,lastTrackIdx,measSet, maxVals,G_List,H,Q_List,R,m
             j=j+1 #index of new track
             z_i = measSet[:,i] #ith measurement 
             
-            trackMM_j = track_MM(z_i,G_List,H,Q_List,R,maxVals,pInit,startSample,Ts,models,filters,sensor,N) #initiate jth track 
+            trackMM_j = track_MM(z_i,G_List,H,Q_List,R,maxVals,pInit,startSample,Ts,models,filters,sensor, sensorPos, N) #initiate jth track
             trackList[j] = trackMM_j #store track at position j in trackList
            
         lastTrackIdx = j #index of last track
@@ -607,6 +608,76 @@ def updateTracksStatus(trackList,lastTrackIdx,delTenThr, delConfThr, confTenThr,
                 
                 
                 
+    return trackList
+
+
+def updateTracksStatus_MN(trackList, lastTrackIdx, N1, M2, N2, N3, k):
+    numTracks = lastTrackIdx + 1
+
+    for i in range(numTracks):
+        m_k = trackList[i].m_k  # number of captured detections
+        mBar_k = trackList[i].mBar_k  # number of missed detections
+        gateArr = trackList[
+            i].gateArr  # binary array, the size is equivalent to the number of measurements, e.g. if there are 3 measurements at the current time step and only the 1st lies in the gate, then gateArr=[1,0,0]
+        s_k = trackList[i].status  # status of track
+        n_k = trackList[i].n_k  # age of track
+        idx = trackList[i].idx  # index to keep track of scan with a interval
+
+        n_k = n_k + 1
+        ng = sum(gateArr)
+
+        if ng > 0:
+            m_k = m_k + 1
+        else:
+            mBar_k = mBar_k + 1
+
+        if n_k <= N1:  # N1/N1 phase, requires N1 detections in the first N1 scans
+            if mBar_k > 0 and s_k == 1:
+                s_k = 0  # if there is a missed detection in the first N1 scans/frames, terminate track
+                trackList[i].endSample = k  # last frame/scan of the track
+
+            if n_k == N1:  # once it reaches the end of this phase, set m_k and mBar_k to 0 to initialize for the next phase
+                m_k = 0
+                mBar_k = 0
+
+        elif n_k > N1 and n_k <= (N1 + N2):  # M2/N2 phase
+            if m_k >= M2 and s_k == 1:
+                s_k = 2  # if there are M2 detections in the next N2 scans, confirm track
+
+            if mBar_k > (
+                    N2 - M2) and s_k == 1:  # if the number of missed detections is above the difference between N2 and M2, delete track
+                s_k = 0
+                trackList[i].endSample = k
+
+            if n_k == (N1 + N2):  # once it reaches the end of the phase, reset likewise to earlier
+                m_k = 0
+                mBar_k = 0
+                idx = 0  # used to keep track of a scan within a interval
+        elif n_k > (N1 + N2):  # if the age is above the initiation interval, check the next N2 scans
+            idx = idx + 1  # keeps track of scan/frame number within the next N2 scans
+            if s_k == 1:  # if tenative
+                if m_k >= M2:  # if the number of caught detections are above M2, confirm track
+                    s_k = 2
+
+                if mBar_k > N3:  # if the number of missed detections are above N3, delete track
+                    s_k = 0
+                    trackList[i].endSample = k
+            elif s_k == 2:
+                if mBar_k > N3:  # if the number of missed detections are above N3, delete track
+                    s_k = 0
+                    trackList[i].endSample = k
+
+            if idx == N2:  # if the last scan is reached in the interval, reset for the next N2 scans
+                idx = 0
+                m_k = 0
+                mBar_k = 0
+
+        trackList[i].n_k = n_k
+        trackList[i].m_k = m_k
+        trackList[i].mBar_k = mBar_k
+        trackList[i].status = s_k
+        trackList[i].idx = idx
+
     return trackList
             
 

@@ -33,7 +33,6 @@ def distance_weighted_voting(dets, dis):
     for i in range(len(dets)):
         rg = np.square(dis[i, :2])
         rg = np.sqrt(np.sum(rg))
-        print(rg)
         score = 1-((rg-minimum)/(maximum-minimum))/2
         l[dets[i]] += score
     return l.index(max(l))
@@ -62,6 +61,89 @@ def distance_weighted_voting_custom(dets, dis, weights):
 
 
 if __name__ == "__main__":
+    """
+[1, 2, 8, 10, 12, 18, 21, 25, 30, 39, 54, 63, 68, 70, 71, 72, 73, 75, 76, 77, 79, 80, 81, 82, 83, 86, 88]
+[8, 9, 11, 1, 13, 18, 19, 21, 25, 27, 10, 12, 35, 46, 49, 36, 63, 54, 70, 71, 72, 73, 75, 76, 77, 79, 82, 81, 87, 45, 83]
+    rad_id 10 is camid 8
+    Assumptions
+        we are only detecting object in black region
+        3 zones object should only enter or exit in zones 1 (red) or 2 (green).
+        zone 0 is everywhere not zone 1 or zone 2
+        If object entered in zone 1, object must exit in zone 2 (vice versa)
+    
+    Tracking routine
+    Zone_state = [-1]*8000
+    Track j is initialized:
+        if track[j].first_location in zone_1:
+            zone_state[j] = zone_1
+        if track[j].first_location in zone_2:
+            zone_state[j] = zone_2
+        else:
+            zone_state[j] = 0
+    Track j is terminated:
+        if zone_state[j] == 1:
+            if track[j].final_location in zone 1:
+                ?
+            if track[j].final_location in zone 0:
+                track[j] entered in the right place but exited in the wrong place
+            if track[j].final_location in zone 2:
+                track[j] is correct
+        
+        if zone_state[j] == 2:
+            if track[j].final_location in zone 2:
+                ?
+            if track[j].final_location in zone 0:
+                track[j] entered in the right place but exited in the wrong place
+            if track[j].final_location in zone 1:
+                track[j] is correct
+                
+        if zone_state[j] == 0:
+            if track[j].final_location in zone 1 or in zone 2:
+                track[j] entered in the wrong place but exited in the right place
+            if track[j].final_location in zone 0:
+                track[j] entered and exited in the wrong place 
+
+                
+        
+    in total there are 5 cases
+        0. track[j] is correct
+        1. track[j] entered in the right place but exited in the wrong place
+        2. track[j] entered in the wrong place but exited in the right place
+`       3. track[j] entered and exited in the wrong place 
+        4. ? is track has appeared and disappeared in the same zone
+            here the track could be travelling from zone 1 to zone 2 or zone 2 to zone 1
+            we do know it entered or exited in the correct zone 
+        
+        
+        
+        Following the assumptions
+        case 0
+            All good
+        case 1
+            The track must have not finished, a future track must be a continuation of this track
+        case 2
+            The track must resulted from a track which was not finished
+        case 3
+            This track must have resulted from a not finished track and a future track must be a continuation of it
+        case 4
+            This track can be a continuation of a not finished track or a track which was not finished
+    
+    
+    Some more ideas we can further sub divide the zone to include direction I guess? 
+    But there could be more error this way
+    
+    
+    
+ID 5, case='case_4'
+ID 0, case='case_4'
+ID 6, case='case_4'
+ID 2, case='case_2'
+
+
+
+
+
+    """
     import matplotlib.pyplot as plt
     trig = np.array([[    -2.4517,      31.843,     0.40313,    -0.93226],
        [    -2.2685,      32.226,     0.68361,     -1.0643],
