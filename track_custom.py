@@ -76,11 +76,11 @@ def load_weight_sort(device, config_file, half=False, yolo_weights=WEIGHTS / 'yo
 @torch.no_grad()
 def process_track(im, idx, curr_frames, prev_frames, outputs,
                 device, model, stride, names, pt, imgsz, cfg, strongsort_list, dt, seen, half,
-                conf_thres = 0.25,  # confidence threshold
+                conf_thres = 0.75,  # confidence threshold
                 iou_thres = 0.45,  # NMS IOU threshold
                 max_det = 1000,  # maximum detections per image
                 classes = None,
-                agnostic_nms = True,  # class-agnostic NMS
+                agnostic_nms = False,  # class-agnostic NMS
                   ):
     im0s = im.copy()
     im = letterbox(im, 1280, stride=32, auto=True)[0]
@@ -104,6 +104,7 @@ def process_track(im, idx, curr_frames, prev_frames, outputs,
     pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
     dt[2] += time_sync() - t3
     # Process detections
+    dets = []
     for i, det in enumerate(pred):  # detections per image
         seen += 1
         im0 =  im0s.copy()
@@ -139,7 +140,8 @@ def process_track(im, idx, curr_frames, prev_frames, outputs,
                     cls = output[5]
                     c = int(cls)  # integer class
                     id = int(id)  # integer id
-                    label = f'{id} {conf:.2f} {names[c]}'
+                    # label = f'{id} {conf:.2f} {names[c]}'
+                    label = f'{id}'
 
                     dets.append([bboxes, names[c], id, float(conf)])
                     annotator.box_label(bboxes, label, color=colors(c, True))
