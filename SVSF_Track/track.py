@@ -9,7 +9,7 @@ import math
 from scipy.stats.distributions import chi2
 from scipy import linalg
 
-
+print('ok')
 class track:
     def __init__(self,z0,G,H,Q,R,maxVel, maxAcc,omegaMax,pInit,startSample,Ts, modelType, sensor,isMM, sensorPos, N):
         #initializes track using 1-point initialization
