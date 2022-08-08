@@ -20,7 +20,7 @@ plt.close('all')
 from datetime import datetime
 startTime = datetime.now()
 
-filterType="IMMIPDAKF" #tracking algorithm
+filterType="IMMIPDA" #tracking algorithm
 useSVSF_G = False #use S.A. Gadsden's SVSF
 useNewTraj = 1 # 1 means to generate a new synthetic trajectory, 0 means to use a existing one from a file
 isIMM = True
@@ -37,12 +37,12 @@ sigma_v = 1E-3 #process noise standard deviation
 L1 = .16
 L2 = .06
 sigma_v_filt = sigma_v #process noise standard deviation for filter
-maxVel = 27 #for initializing velocity variance for 1-point initialization
-maxAcc = 5
+maxVel = 30#for initializing velocity variance for 1-point initialization
+maxAcc =15
 omegaMax = math.radians(4) #for initializing turn-rate variance for 1-point initialization
-numRuns =1
+numRuns =25
 #number of Monte Carlo Runs
-N = int(totalTime/Ts) #number of samples in the timulation
+N = int(totalTime/Ts) #number of samples in the simulation
 
 
 Q_CV = np.diag([sigma_v**2,sigma_v**2,0]) #process noise co-variance for CV model
@@ -53,11 +53,10 @@ G_CV = np.array([[(Ts**2)/2, 0,0],[0, (Ts**2)/2,0],[Ts,0,0],[0,Ts,0],[0,0,0],[0,
 G_CA = np.array([[(Ts**2)/2, 0,0],[0, (Ts**2)/2,0],[Ts,0,0],[0,Ts,0], [1,0,0],[0,1,0],[0,0,0]]) #input gain for CA
 G_CT = np.array([[(Ts**2)/2, 0,0],[0, (Ts**2)/2,0],[Ts,0,0],[0,Ts,0],[0,0,0],[0,0,0],[0,0,Ts]]) #input gain for CT
 
-G_List = [G_CV,G_CA,G_CT] #input gain list
-Q_List = [Q_CV,Q_CA,Q_CT] #process noise co-variance list
+G_List = [G_CV,G_CT,G_CA] #input gain list
+Q_List = [Q_CV,Q_CT,Q_CA] #process noise co-variance list
 maxVals = [maxVel,maxAcc,omegaMax]
-uVec0 = [1./3,1./3,1./3] #initial mode probabilities
-models = ["CV","CA", "CT"]
+models = ["CV","CT", 'CA']
 filters = ['IPDAKF','IPDAKF','IPDAKF']
 
 t = np.arange(0,totalTime,Ts) #time vector for simulation for plotting
@@ -71,11 +70,11 @@ regionWidth = 100 #width of the clutter region surrounding a target
 regionLength = 100 #length of the clutter region surrounding a target
 pInit = .2 #initial probability of track existence
 
-P_ii_IPDA = .9999  #for Markov matrix of IPDA
+P_ii_IPDA = .999  #for Markov matrix of IPDA
 MP_IPDA = np.array([[P_ii_IPDA,1-P_ii_IPDA],[1-P_ii_IPDA,P_ii_IPDA]]) #Markov matrix for IPDA
 r = len(models)
 
-P_ii_IMM = .999
+P_ii_IMM = .999 #for Markov matrix of IMM
 P_ij_IMM = (1-P_ii_IMM)/r
 
 if r==2:
@@ -99,16 +98,16 @@ angleStd = .01 #standard deviation of angle for radar
 
 #For generating the trajectory of the 1st remote car, 7 variables below are required to obtain the ground truth trajectory
 x0_Target1 = np.array([0,0,27,27,0,0, math.radians(0)]) #initial state for the 1st target
-covListTarget1 = [Q_CV,Q_CA] #each entry is the process noise co-variance for each segment
+covListTarget1 = [Q_CV,Q_CT] #each entry is the process noise co-variance for each segment
 xVelListTarget1 = [0, 0] #if the velocity has to change to a specific value in a segment, change that
 yVelListTarget1 = [0,0]
-xAccListTarget1 = [0,1]
-yAccListTarget1 = [0,1]
-omegaListTarget1 = [math.radians(0),math.radians(0)] #turn-rate for each segment
-modelListTarget1 = ['CV','CA'] # model for each segment
+xAccListTarget1 = [0,0]
+yAccListTarget1 = [0,0]
+omegaListTarget1 = [math.radians(0),math.radians(4)] #turn-rate for each segment
+modelListTarget1 = ['CV','CT'] # model for each segment
 timesTarget1 = [50,150] #time at which each segment concludes
 
-t1_start = 0 #time in which target 1 appears
+t1_start = 1 #time in which target 1 appears
 t1_end = timesTarget1[-1] #time in which target 1 disappears
 t1_startSample = int(t1_start/Ts) #sample number in which target 1 appears
 t1_endSample = int(t1_end/Ts) #sample number in which target 2 disappears
@@ -116,13 +115,13 @@ N_t1 = t1_endSample-t1_startSample+1 #number of samples for the period in which 
 
 #For 2nd remote car
 x0_Target2 = np.array([-500,-500,-25,-25,0,0, math.radians(0)])
-covListTarget2 = [Q_CV,Q_CA]
+covListTarget2 = [Q_CV,Q_CT]
 xVelListTarget2 = [0, 0]
 yVelListTarget2 = [0,0]
-xAccListTarget2= [0,-1]
-yAccListTarget2 = [0,-1]
-omegaListTarget2 =[math.radians(0),math.radians(0)]
-modelListTarget2 = ['CV','CA']
+xAccListTarget2= [0,0]
+yAccListTarget2 = [0,0]
+omegaListTarget2 =[math.radians(0),math.radians(4)]
+modelListTarget2 = ['CV','CT']
 timesTarget2 = [100,150]
 
 t2_start = 20
@@ -139,6 +138,7 @@ G_CA = np.array([[(Ts**2)/2, 0,0],[0, (Ts**2)/2,0],[Ts,0,0],[0,Ts,0], [1,0,0],[0
 
 Q_CT = np.diag(np.array([sigma_v_filt**2,sigma_v_filt**2,sigma_v_filt**2]))
 G_CT = np.array([[(Ts**2)/2, 0,0],[0, (Ts**2)/2,0],[Ts,0,0],[0,Ts,0],[0,0,0],[0,0,0],[0,0,Ts]])
+
 
 if useSVSF_G==True: #use S.A. Gadsden's SVSF
     #requires the number of states to equal the number of measurements
@@ -167,16 +167,27 @@ if useSVSF_G==True: #parameters for S.A.Gadsden's SVSF
     psi3 = 269.0
     psiZ = np.array([psi1,psi1,psi2,psi2,psi3])
     psiY = np.array([170.0,170.0,561.0])
+
 else:
     #Parameters for the m<n SVSF, where m=# of measurements and n=# of states
+    '''
     psi1 = 5
     psi2 = 50
     psi3 = 100
+    psi4 = 100
+    '''
     gammaZ = .9*np.eye(m)
     gammaY = .9*np.eye(n-m)
+    psi1 = math.inf
+    psi2 = math.inf
+    psi3 = math.inf
+    psi4 = math.inf
     
     psiZ = np.array([psi1,psi1])
-    psiY = np.array([psi2,psi2,psi3])
+    psiY = np.array([psi2,psi2,psi3,psi3,psi4])
+    
+    
+SVSFParams = [psiZ,psiY,gammaZ,gammaY,T]
     
 if useNewTraj==1:
     startSampleT1 = int(t1_start/Ts) 
@@ -332,10 +343,18 @@ for ii in range(numRuns): #for each Monte Carlo run
         xLims2 = [xMin,xMax] #info for the coverage region around target 2
         yLims2 = [yMin,yMax]    
         clutterPoints2 = generateClutter(xLims2, yLims2, lambdaVal) #generate clutter around target 2
-        unassignedMeas0 = np.hstack((clutterPoints1,clutterPoints2,targetMeas)) #full set of unassigned measurements
+        
+        if t1_start == 0 or t2_start ==0:  
+            unassignedMeas0 = np.hstack((clutterPoints1,clutterPoints2,targetMeas)) #full set of unassigned measurements
+        else:
+            unassignedMeas0 = np.hstack((clutterPoints1,clutterPoints2))
     else:
-        unassignedMeas0 = np.hstack((clutterPoints1,targetMeas)) #full set of unassigned measurements
-    
+        if t1_start == 0 and t2_start != 0:
+            unassignedMeas0 = np.hstack((clutterPoints1,targetMeas)) #full set of unassigned measurements
+        elif t1_start !=0 and t2_start==0:
+            unassignedMeas0 = np.hstack((clutterPoints2,targetMeas))
+        elif t1_start == 0 and t2_start==0:
+            unassignedMeas0 = np.hstack((clutterPoints1,clutterPoints2,targetMeas))
     #initial tracks, each unassigned measurement initiates a track
     trackList,lastTrackIdx = initiateTracksMM(trackList,lastTrackIdx, unassignedMeas0, maxVals, G_List, H, Q_List, R, models,filters, Ts, pInit, 0, sensor, N)
     
@@ -414,8 +433,7 @@ for ii in range(numRuns): #for each Monte Carlo run
             if T2_Detected==0:
                 targetMeas = [] #if target 2 is present but not detected, make the array empty
             else:
-                targetMeas = np.expand_dims(z_k2,axis=-1) #if present and detected, store its measurement into targetMeas
-            
+                targetMeas = np.expand_dims(z_k2,axis=-1) #if present and detected, store its measurement into targetMeas  
         elif T1_Present==True and T2_Present==True: 
             if T1_Detected==1 and T2_Detected==1: #if both targets are present and detected, store their measurements into targetMeas
                 targetMeas = np.hstack((np.expand_dims(z_k2,axis=-1) ,np.expand_dims(z_k1,axis=-1) ))
@@ -428,7 +446,9 @@ for ii in range(numRuns): #for each Monte Carlo run
         else: #if no target is present, make targetMeas empty
             targetMeas = []
             
-        for i in range(numTargets): #generate clutter around each target
+            
+        ##############################generate clutter around each target###################################    
+        for i in range(numTargets): 
             if i==0:
                 x_k = xTargetCarTraj1[:,k] #true state of target 1
                 #z_k = z_k1
@@ -466,7 +486,7 @@ for ii in range(numRuns): #for each Monte Carlo run
             measSet = np.hstack((clutterPoints1,clutterPoints2)) #full set of measurements
      
         trackList, unassignedMeas = gating(trackList,lastTrackIdx, PG, MP_IMM, maxVals,sensorPos,measSet) #perform gating
-        trackList = updateStateTracks(trackList,lastTrackIdx, filterType, measSet, maxVals, lambdaVal,MP_IPDA, PG, PD, sensorPos,T, gammaZ, gammaY, psiZ, psiY, k) #update the state of each track
+        trackList = updateStateTracks(trackList,lastTrackIdx, filterType, measSet, maxVals, lambdaVal,MP_IPDA, PG, PD, sensorPos,SVSFParams, k) #update the state of each track
         trackList = updateTracksStatus(trackList,lastTrackIdx, delTenThr, delConfThr, confTenThr,k) #update the status of each track usiing the track manager
         
         
@@ -481,12 +501,12 @@ for ii in range(numRuns): #for each Monte Carlo run
             trackList[i].endSample = k
             
     for j in range(numTracks): #loop through each track
-        isTrack1 = abs(t1_startSample - trackList[j].startSample) <8 #Boolean value, associate track to target 1 if the startSample is close to the true start sample
-        isTrack2 = abs(t2_startSample - trackList[j].startSample) <8 #Boolean value, associate track to target 2 if the startSample is close to the true start sample
+        isTrack1 = abs(t1_startSample - trackList[j].startSample) <20 #Boolean value, associate track to target 1 if the startSample is close to the true start sample
+        isTrack2 = abs(t2_startSample - trackList[j].startSample) <20 #Boolean value, associate track to target 2 if the startSample is close to the true start sample
         
         numSamples = trackList[j].endSample - trackList[j].startSample + 1 #total number of samples processed in the track
         
-        if (isTrack1==True or isTrack2==True) and numSamples>10: #if the track is associated to one of the targets and the number of samples is greater than 100
+        if (isTrack1==True or isTrack2==True) and numSamples>100: #if the track is associated to one of the targets and the number of samples is greater than 100
                                                                 #obtain its state estimates
             xEsts = trackList[j].xEsts
             
