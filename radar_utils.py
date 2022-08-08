@@ -1,5 +1,5 @@
-import matplotlib
-matplotlib.use('TkAgg')
+# import matplotlib
+# matplotlib.use('TkAgg')
 # import mayavi.mlab as mlab
 
 import numpy as np
@@ -30,6 +30,22 @@ def project_to_image(points, proj_mat):
     pts = proj_mat @ pts
     pts[:2, :] /= pts[2, :]
     points = np.vstack((pts[:2, :], points[3:, :]))
+    return points
+
+
+def transform_radar(points, proj_mat):
+    """
+    Apply the perspective projection
+    Args:
+        pts_3d:     3D points in camera coordinate [3, npoints]
+        proj_mat:   Projection matrix [3, 4]
+    """
+    num_pts = points.shape[1]
+    pts = points[:3, :]
+    # Change to homogenous coordinate
+    pts = np.vstack((pts, np.ones((1, num_pts))))
+    pts = proj_mat @ pts
+    points = np.vstack((pts[:3, :], points[3:, :]))
     return points
 
 

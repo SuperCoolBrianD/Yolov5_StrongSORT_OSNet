@@ -9,24 +9,12 @@ import rosbag
 from mpl_point_clicker import clicker
 
 # Read recording
-bag = rosbag.Bag("record/working.bag")
+bag = rosbag.Bag("record/rooftop.bag")
 # bag = rosbag.Bag("record/traffic1.bag")
 topics = bag.get_type_and_topic_info()
 
-# old SORT tracker
-# mot_tracker = sort.Sort(min_hits=2, max_age=8, iou_threshold=0.1)
-
-for i in topics[1]:
-    print(i)
-
-radar_d = '/radar_data'
-s = 0
-# model, device, colors, names = init_yoloR(weights='yolor/yolor_p6.pt', cfg='yolor/cfg/yolor_p6.cfg',
-#                                           names='yolor/data/coco.names', out='inference/output', imgsz=640)
-# adjust image visualization
 cv2.namedWindow("Camera")
 cv2.moveWindow('Camera', 800, 800)
-# init loop
 
 
 # mtx = np.array([[234.45076996, 0., 334.1804498],
@@ -40,13 +28,14 @@ mtx = np.array([[747.9932, 0., 655.5036],
                 [0., 0., 1.]])
 
 
-hull = np.array([[ 16.12903226, 118.83116883],
-       [-16.77419355,  23.59307359],
-       [ -0.64516129,  16.23376623],
-       [ 23.87096774,  87.66233766],
-       [ 20.96774194,  95.45454545],
-       [ 34.19354839, 110.60606061],
-        [ 16.12903226, 118.83116883],])
+hull = np.array([[ -3.87096774,  68.18181818],
+       [-17.74193548,  54.32900433],
+       [  1.93548387,  16.23376623],
+       [-18.70967742,  -1.94805195],
+       [ -4.19354839, -19.26406926],
+       [ 50.32258065,  24.45887446],
+       [ 37.41935484,  37.44588745],
+       [ 18.70967742,  29.22077922]])
 
 frame = SRS_data_frame()
 p_arr_all = np.array([[0, 0, 0, 0, 0]])
@@ -82,6 +71,8 @@ for j, i in enumerate(bag.read_messages()):
         axs.set_ylim(-50, 100)
         hull = np.asarray(klicker.get_positions())
         print(hull)
+
         cv2.imshow('camera', image_np)
+        cv2.waitKey(1)
         # input()
         p_arr_all = arr_all.copy()

@@ -30,7 +30,7 @@ matplotlib.use('TkAgg')
 import time
 # Read recording
 
-bag = rosbag.Bag("record/working.bag")
+bag = rosbag.Bag("record/rooftop.bag")
 # bag = rosbag.Bag("record/traffic3.bag")
 # bag = rosbag.Bag("record/traffic1.bag")
 topics = bag.get_type_and_topic_info()
@@ -203,10 +203,20 @@ svm_model = pickle.load(open('svm_model_scale.pkl', 'rb'))
 scaler_model = pickle.load(open('scaler_model.pkl', 'rb'))
 classes = ['car', 'bus', 'person', 'truck', 'no_match']
 yolo_classes = ['car', 'bus', 'person', 'truck', 'no_match']
-rx = 1.6
+# 1.56 0.0 0.05999999999999983 0.7000000000000002 0.0 0.0
+# rx = 1.6
+# ry = 0
+# rz = .04
+# tx = 0
+# ty = 0
+# tz = 0
+
+# for rooftop
+
+rx = 1.56
 ry = 0
-rz = .04
-tx = 0
+rz = 0.050000000000000044
+tx = 0.2999999999999998
 ty = 0
 tz = 0
 
@@ -233,13 +243,23 @@ truck_count = 0
 #        [ -1.61290323,  -1.94805195],
 #         [-18.06451613,  17.53246753]])
 # for working
-hull = np.array([[ 16.12903226, 118.83116883],
-       [-16.77419355,  23.59307359],
-       [ -0.64516129,  16.23376623],
-       [ 23.87096774,  87.66233766],
-       [ 20.96774194,  95.45454545],
-       [ 34.19354839, 110.60606061],
-        [ 16.12903226, 118.83116883],])
+# hull = np.array([[ 16.12903226, 118.83116883],
+#        [-16.77419355,  23.59307359],
+#        [ -0.64516129,  16.23376623],
+#        [ 23.87096774,  87.66233766],
+#        [ 20.96774194,  95.45454545],
+#        [ 34.19354839, 110.60606061],
+#         [ 16.12903226, 118.83116883],])
+
+# For rooftop
+hull = np.array([[ -3.87096774,  68.18181818],
+       [-17.74193548,  54.32900433],
+       [  1.93548387,  16.23376623],
+       [-18.70967742,  -1.94805195],
+       [ -4.19354839, -19.26406926],
+       [ 50.32258065,  24.45887446],
+       [ 37.41935484,  37.44588745],
+       [ 18.70967742,  29.22077922]])
 
 
 in_zone = np.array([[-16.77419355,  24.02597403],
@@ -416,6 +436,7 @@ def animate(g):
             pc = arr[:, :4]
             # Perform class specific DBSCAN
             total_box, cls = dbscan_cluster(pc, eps=2.5, min_sample=15, axs=axs)
+
             total_box_1, cls_1 = dbscan_cluster(pc, eps=2, min_sample=2, axs=axs)
             if isinstance(cls, type(None)):
                 cls = []
@@ -541,11 +562,13 @@ def animate(g):
                 else:
                     road_objects_dict[ii][2] += 1
             matched_cameras = []
+            print(trackList[:lastTrackIdx])
             for jj, ii in enumerate(trackList[:lastTrackIdx]):
+                if lastTrackIdx == -1:
+                    break
                 # print(ii.BLs)
                 # get centroid
                 # check if track started in correct position
-
                 centroid = ii.xPost[:2]
 
                 track_label = None
@@ -576,7 +599,7 @@ def animate(g):
                     # if track has terminated remove from tracked objects
                     centroid_img = np.zeros((1, 4))
                     centroid_img[:, :2] = centroid
-                    centroid_img[:, 2] = -2
+                    centroid_img[:, 2] = 0
                     pts = project_to_image(centroid_img.T, r2c).flatten()
                     s_img = np.zeros((1, 4))
                     s_img[:, :2] = [x1, y1]
@@ -734,8 +757,6 @@ def animate(g):
                         # axs.plot(centroid[0], centroid[1], marker="o", markersize=5)
                         # print(jj)
                         # print(tracked_list[jj].start)
-
-
                     # tracked_object[jj] = None
                     alive_track[jj] = False
                     continue
