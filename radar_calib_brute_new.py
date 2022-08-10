@@ -138,11 +138,11 @@ for j, i in enumerate(bag.read_messages()):
         tz = cv2.getTrackbarPos('tz', 'TrackBar') / 10 - 5
 
         if cls:
-            for cc in cls:
-                draw_radar(arr_all, fig=fig, pts_scale=0.5, pts_color=(1, 1, 1), view=v)
-                bbox = get_bbox_cls(cc)
-                bbox = get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], 0)
-                draw_gt_boxes3d(bbox, fig=fig)
+            # for cc in cls:
+            #     draw_radar(arr_all, fig=fig, pts_scale=0.5, pts_color=(1, 1, 1), view=v)
+            #     bbox = get_bbox_cls(cc)
+            #     bbox = get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], 0)
+            #     draw_gt_boxes3d(bbox, fig=fig)
             print('Adjust using trackbar, Press c for next frame')
             while True:
                 # new_cam1 = cam1.copy()cccccccccccccc
@@ -157,7 +157,7 @@ for j, i in enumerate(bag.read_messages()):
                 # extrinsic radar -> pixel coordinate
                 # radar -> camera coordinate
                 # radar_cam_coord -> rotx(alpha) * radar_cam_coord -> world coordinate with origin at radar (pitch about 5 degree)
-                new_cam1, cam_arr = render_radar_on_image(arr, image_np, r2c, 9000, 9000)
+                new_cam1, cam_arr = render_radar_on_image(arr_all, image_np, r2c, 9000, 9000)
                 for cc in cls:
                     bbox = get_bbox_cls(cc)
                     bbox = get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], 0)

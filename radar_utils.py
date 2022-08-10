@@ -1,5 +1,5 @@
-# import matplotlib
-# matplotlib.use('TkAgg')
+import matplotlib
+matplotlib.use('TkAgg')
 # import mayavi.mlab as mlab
 
 import numpy as np
@@ -209,13 +209,21 @@ def filter_zero(pc):
     return pc
 
 
+def filter_move(pc):
+    """Filter low velocity points"""
+    mask = np.abs(pc[:, 3]) < 0.05
+    pc = pc[mask, :]
+    return pc
+
+
+
 def get_bbox(arr):
     x_coord, y_coord, z_coord = arr[:, 0], arr[:, 1], arr[:, 2]
     x_min = min(x_coord)-1
-    y_min = min(y_coord)-1
+    z_min = min(z_coord)-1
     x_max = max(x_coord)+1
-    y_max = max(y_coord)+1
-    return [x_min, y_min, x_max-x_min, y_max-y_min], np.array([[x_min, y_min, x_max, y_max, 1]])
+    z_max = max(z_coord)+1
+    return [x_min, z_min, x_max-x_min, z_max-z_min], np.array([[x_min, z_min, x_max, z_max, 1]])
 
 
 def get_bbox_2d(arr):
@@ -359,8 +367,8 @@ def match_measurement(detection_list, tracks):
     picked = None
     thresh = 3
     for index, det in enumerate(detection_list):
-        if det.sensor != 'Camera':
-            d = np.sqrt((det.centroid[0] - tracks[0])**2 + (det.centroid[1] - tracks[1])**2)
+        if det.sensor != 'Camera' and det.sensor != 'Radar_track':
+            d = np.sqrt((det.centroid[2] - tracks[0])**2 + (det.centroid[0] - tracks[1])**2)
             if d < distance and d < thresh:
                 distance = d
                 picked = index
@@ -446,7 +454,7 @@ class SRS_data_frame:
 
 
 class DetectedObject:
-    def __init__(self, r_d=None, c_d=None):
+    def __init__(self, r_d=None, c_d=None, trk=None):
         if c_d and not  r_d:
             self.cam_label = c_d[1]
             self.cam_box = c_d[0]
@@ -483,6 +491,18 @@ class DetectedObject:
             self.sensor = 'Both'
             self.cam_rad_iou = None
             self.rad_id = None
+        elif trk:
+            self.cls = None
+            self.centroid = trk[1]
+            self.rad_box = None
+            self.rad_box2d = None
+            self.rad_label = None
+            self.cam_label = None
+            self.cam_box = None
+            self.cam_id = None
+            self.sensor = 'Radar_track'
+            self.cam_rad_iou = None
+            self.rad_id = trk[0]
 
 
 class DetectedObject_old:
@@ -495,7 +515,28 @@ class DetectedObject_old:
         self.centroid = None
         self.rad_id = None
 
-class TrackedObject:
+
+class TrackedObjectALL:
+    def __init__(self, c_id=None, r_id=None, sensor=None):
+        if c_id:
+            self.c_id = [c_id]
+            self.r_id = []
+        elif r_id:
+            self.c_id = []
+            self.r_id = [r_id]
+        elif c_id and r_id:
+            self.c_id = [c_id]
+            self.r_id = [r_id]
+
+        self.activate = True
+        self.deleted = False
+    def delete(self):
+        self.c_id = []
+        self.r_id = []
+        self.activate = False
+        self.deleted = True
+
+class RadarTrackedObject:
     def __init__(self):
         self.dets=[]
         self.start = None

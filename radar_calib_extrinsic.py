@@ -1,18 +1,14 @@
-import matplotlib
-import mayavi.mlab as mlab
+# import matplotlib
+# import mayavi.mlab as mlab
 import sys
 
 import cv2
 
 sys.path.append('yolor')
 sys.path.append('SVSF_Track')
-#from yolor.detect_custom import init_yoloR, detect
-from SVSF_Track.MTT_Functions import *
 from radar_utils import *
-from projectutils import draw_radar
 import rosbag
-from matplotlib.animation import FuncAnimation
-from vis_util import *
+# from vis_util import *
 import pickle
 
 # Read recording
@@ -20,7 +16,7 @@ bag = rosbag.Bag("record/rooftop.bag")
 # bag = rosbag.Bag("record/traffic1.bag")
 topics = bag.get_type_and_topic_info()
 
-fig = mlab.figure(size=(1000, 500), bgcolor=(0, 0, 0))
+# fig = mlab.figure(size=(1000, 500), bgcolor=(0, 0, 0))
 calib_pts = []
 cam1 = np.empty((0,0))
 v = (-108.20802358222203, 7.280529894768495, 470.76425650815855, ([12.091, -1.047, -2.0325]))

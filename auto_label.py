@@ -57,13 +57,9 @@ epoch = None
 for j, i in enumerate(bag.read_messages()):
     # read ros Topic camera or radar
     sensor = frame.load_data(i)
-    # print(idx)
-    # print(sensor)
-    if sensor == '/Radar':
+    if frame.full_data:
         os.makedirs(f'dataset/{idx:05d}')
         file = open(f'dataset/{idx:05d}/ground_truth.txt', 'w')
-        idx+=1
-    if frame.full_data:
         print(abs(abs(frame.camera.message.header.stamp.to_sec()- frame.radar.message.header.stamp.to_sec())-1))
         # print(frame.camera.message.header.stamp.to_sec()- epoch)
         image_np = imgmsg_to_cv2(frame.camera.message)
@@ -109,6 +105,8 @@ for j, i in enumerate(bag.read_messages()):
         # idx+=1
         # frame.clear_data()
         file.close()
+
+        idx+=1
 
 
 print(idx)

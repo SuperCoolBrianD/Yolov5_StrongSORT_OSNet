@@ -30,7 +30,7 @@ rx = -20/180*np.pi
 ry = 0
 rz = 0
 tx = 0
-ty = 0
+ty = -10.9
 tz = 0
 c2g = extrinsic_matrix(rx, ry, rz, tx, ty, tz)
 print(c2g)

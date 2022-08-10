@@ -59,7 +59,7 @@ radar_time_0 = 0
 camera_time_0 = 0
 update = 1
 cam1 = np.empty((5,5))
-tracked_object = dict()
+tracked_object_radar = dict()
 alive_track = [0] * 8000
 life = 10
 # track parameters
@@ -216,7 +216,7 @@ idx=0
 epoch = 0
 cluster_hist = [[] for i in range(8000)]
 class_track = [[] for i in range(8000)]
-tracked_list = [TrackedObject() for i in range(8000)]
+tracked_list = [RadarTrackedObject() for i in range(8000)]
 bus_count = 0
 person_count = 0
 car_count = 0
@@ -321,7 +321,7 @@ def animate(g):
     global camera_time_0
     global update
     global cam1
-    global tracked_object
+    global tracked_object_radar
     global alive_track
     global life
     global trackList

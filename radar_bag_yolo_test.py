@@ -37,7 +37,7 @@ radar_time_0 = 0
 camera_time_0 = 0
 update = 1
 cam1 = np.empty((5,5))
-tracked_object = dict()
+tracked_object_radar = dict()
 alive_track = [0] * 8000
 life = 10
 # track parameters
