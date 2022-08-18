@@ -101,14 +101,17 @@ def find_gt(r_box, c_box, image=np.empty([])):
     return matched, max_iou
 
 
-def match_detection(r_box, c_box):
+def match_detection(r_box, c_box, iou_thres=0.3):
     iou_arr = np.zeros((r_box.shape[0], c_box.shape[0]))
     for i in range(r_box.shape[0]):
         for j in range(c_box.shape[0]):
             c = c_box[j, :]
             r = r_box[i, :]
             iou = IOU(r, c)
-            iou_arr[i, j] = iou
+            if iou > iou_thres:
+                iou_arr[i, j] = iou
+            else:
+                iou_arr[i, j] = 0
     radar_matched = []
     camera_matched = []
     ious = []

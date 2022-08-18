@@ -1,5 +1,5 @@
-import matplotlib
-matplotlib.use('TkAgg')
+# import matplotlib
+# matplotlib.use('TkAgg')
 # import mayavi.mlab as mlab
 
 import numpy as np
@@ -292,6 +292,31 @@ def get_bbox_coord(t1, t2, t3, w, h, l, rz, is_homogenous=False):
     return points_3d
 
 
+def Cam2Ground(px, py, P):
+    p = np.array([[px, py, 1]]).T # pixel coordinate
+    W = P@p # world coordinate
+    X = W[0, 0]/W[2,0]
+    Z = W[1, 0]/W[2,0]
+    return X, Z
+
+def Cam2WCS(rx, ry, rz, tx, ty, tz, intrinsic):
+    rx = rotx(rx)
+    ry = roty(ry)
+    rz = rotz(rz)
+    rr = rotx(-0.5*np.pi) @ roty(0.5*np.pi) @ rx @ry @rz
+    # rotation matrix
+    rr [0,0] = rr [1,1] = rr[1, 2] = rr[2,0]=0
+    rr [1, 0] = -1
+    rr = rr.T
+    c = np.array([[tx, ty, tz]]).T
+    t = -rr@c  # translation vector
+    P = intrinsic @ np.array([[rr[0, 0], rr[0, 1], t[0, 0]],  # extrinsic matrix
+                             [rr[1, 0], rr[1, 1], t[1, 0]],
+                             [rr[2, 0], rr[2, 1], t[2, 0]]])
+    P = np.linalg.inv(P)  # world coordinate
+    return P
+
+
 
 def draw_projected_box3d(image, qs, color=(255, 255, 255), thickness=1):
     qs = qs.astype(np.int32).transpose()
@@ -365,10 +390,10 @@ def get_centroid(bbox):
 def match_measurement(detection_list, tracks):
     distance = 999
     picked = None
-    thresh = 3
+    thresh = 1
     for index, det in enumerate(detection_list):
         if det.sensor != 'Camera' and det.sensor != 'Radar_track':
-            d = np.sqrt((det.centroid[2] - tracks[0])**2 + (det.centroid[0] - tracks[1])**2)
+            d = np.sqrt((det.centroid[0] - tracks[0])**2 + (det.centroid[2] - tracks[1])**2)
             if d < distance and d < thresh:
                 distance = d
                 picked = index
@@ -503,6 +528,7 @@ class DetectedObject:
             self.sensor = 'Radar_track'
             self.cam_rad_iou = None
             self.rad_id = trk[0]
+        self.radar_track = None
 
 
 class DetectedObject_old:
@@ -527,13 +553,14 @@ class TrackedObjectALL:
         elif c_id and r_id:
             self.c_id = [c_id]
             self.r_id = [r_id]
-
-        self.activate = True
+        self.life = 10
+        self.activate = sensor
         self.deleted = False
     def delete(self):
         self.c_id = []
         self.r_id = []
         self.activate = False
+        self.life = 0
         self.deleted = True
 
 class RadarTrackedObject:

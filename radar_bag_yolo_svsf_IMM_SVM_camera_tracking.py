@@ -125,7 +125,7 @@ omegaMax = math.radians(4) #for initializing turn-rate variance for 1-point init
 maxVals = [maxVel, maxAcc, omegaMax]
 
 #Parameters for IPDA
-pInit = .2 #initial probability of track existence
+pInit = .4 #initial probability of track existence
 PD = .6 #probability of target detection in a time step
 #PG = .99999 #gate probability
 PG = .99999
@@ -212,15 +212,18 @@ yolo_classes = ['car', 'bus', 'person', 'truck', 'no_match']
 
 # for rooftop
 
-rx = 1.56
+rx = 1.58
 ry = 0
-rz = 0.025
+rz = 0.05
 tx = 0.2999999999999998
 ty = 0
 tz = 0
+height = 12.5
+alpha = 22/180*np.pi
 r2c_e = extrinsic_matrix(rx, ry, rz, tx, ty, tz)
-c2g = extrinsic_matrix(-20/180*np.pi, 0, 0, 0, -10.9, 0)
-g2c_p = cam_radar(20/180*np.pi, 0, 0, 0, 10.9, 0, mtx)
+c2g = extrinsic_matrix(-alpha, 0, 0, 0, -height, 0)
+g2c_p = cam_radar(alpha, 0, 0, 0, height, 0, mtx)
+c2wcs = Cam2WCS(-alpha, 0, 0, 0, 0, height, mtx)
 frame = SRS_data_frame()
 idx=0
 epoch = 0
@@ -252,12 +255,11 @@ truck_count = 0
 #         [ 16.12903226, 118.83116883],])
 
 # For rooftop
-hull = np.array([[ 35.05376344,  25.97402597],
-       [ 18.27956989,  -3.03030303],
-       [ 87.52688172, -34.63203463],
-       [ 93.11827957,  -9.95670996],
-       [ 60.        ,   4.32900433],
-       [ 63.01075269,  18.61471861]])
+hull = np.array([[-18.70967742,  93.07359307],
+       [-34.19354839,  84.41558442],
+       [ -0.21505376,  16.45021645],
+       [ 14.83870968,  23.80952381],
+        [-18.70967742,  93.07359307],])
 
 in_zone = np.array([[-16.77419355,  24.02597403],
        [-13.22580645,  32.68398268],
@@ -378,14 +380,15 @@ def animate(g):
             arr_concat = np.vstack((arr_all, p_arr_all))
             arr_c = transform_radar(arr_concat.T, r2c_e).T  # from radar to camera (not pixel)
             arr_g = transform_radar(arr_c.T, c2g).T  # from camera to global
-            axs.scatter(arr_g[:, 2], arr_g[:, 0], s=0.5, color='r')
+            # axs.scatter(arr_g[:, 0], arr_g[:, 2], s=0.5, color='r')
             # filter based on road mask
-            # mask = path.contains_points(np.vstack((arr_g[:, 2], arr_g[:, 0])).T)
-            # arr = arr_g[mask]
+            mask = path.contains_points(np.vstack((arr_g[:, 0], arr_g[:, 2])).T)
+            arr_c = arr_c[mask]
+            arr = arr_g[mask]
 
             # draw points on plt figure
             # axs.scatter(arr_g[:, 0], arr_g[:, 1], s=0.5)
-            arr = filter_zero(arr_g)
+            # arr = filter_zero(arr_g)
             #
             # draw points on plt figure
             pc = arr[:, :4]
@@ -397,7 +400,7 @@ def animate(g):
             if isinstance(cls_1, type(None)):
                 cls_1 = []
             total_box = np.vstack((total_box, total_box_1))
-            print(total_box)
+            # print(total_box)
             box_index = non_max_suppression_fast(total_box[:, :4], .2)
             cls.extend(cls_1)
             cls = [cls[ii] for ii in box_index]
@@ -408,7 +411,7 @@ def animate(g):
             if run_cam_d:
                 _, _, C_M, camera_detection, outputs = process_track(image_np, i, curr_frames, prev_frames, outputs,
                                                      device, model, stride, names, pt, imgsz, cfg, strongsort_list, dt,
-                                                     seen, half, classes=[2])
+                                                     seen, half, classes=[2], conf_thres=0.75)
                 # [5, 7, 0, 2]
                 im0 = C_M.copy()
             if cls:
@@ -431,7 +434,7 @@ def animate(g):
                     box2d = convert_topy_bottomx(box2d)
                     radar_detection.append([cc, centroid, bbox, box2d])
                 # measSet = measSet[:, :2].T
-                measSet = np.vstack((measSet[:, 2].T, measSet[:, 0 ].T))
+                measSet = np.vstack((measSet[:, 0].T, measSet[:, 2].T))
                 features = scaler_model.fit_transform(features)
                 prediction = svm_model.predict_proba(features)
                 for ii in range(len(cls)):
@@ -520,9 +523,14 @@ def animate(g):
                 centroid = ii.xPost[:2]
 
                 track_label = None
-                if not ii.endSample and ii.status == 2:
-                    if start_list[jj] == -1:
+                # if not ii.endSample and ii.status == 2:
+                # if jj in [4, 16, 29, 33]:
 
+                if not ii.endSample:
+                    axs.text(centroid[0], centroid[1] - 2, 'ID: ' + str(jj), fontsize=11,
+                             color='r')
+                    # axs.scatter(centroid[0], centroid[1], s=5, color='r')
+                    if start_list[jj] == -1:
                         ii.ID = max(radar_ids) + 1
                         radar_ids.append(ii.ID)
                         radar_id_count += 1
@@ -533,8 +541,10 @@ def animate(g):
                         else:
                             zone = 0
                         start_list[jj] = [k, zone]
-                    axs.text(centroid[0], centroid[1] - 2, 'ID: ' + str(ii.ID), fontsize=11,
-                             color='r')
+                    # if jj in [4, 16, 29 ,33]:
+                    #     axs.text(centroid[0], centroid[1] - 2, 'ID: ' + str(jj), fontsize=11,
+                    #              color='r')
+                    #     axs.scatter(centroid[0], centroid[1], s=5, color='r')
                     speed = np.sqrt(ii.xPost[2] ** 2 + ii.xPost[3] ** 2) * 3.6
                     ii.speed = speed
                     v = ii.xPost[3], ii.xPost[2]
@@ -574,13 +584,6 @@ def animate(g):
                         # mark the matched camera ID
                         matched_cameras.append(c_track_id)
                         # If this radar ID isn't matched with the camera previously add it
-                        if jj not in road_objects_dict[c_track_id][1]:
-                            road_objects_dict[c_track_id][0].append(ii.ID)
-                            road_objects_dict[c_track_id][1].append(jj)
-                    else:
-                        c_track_id = None
-                        road_objects_dict['no_match'][0].append(ii.ID)
-                        road_objects_dict['no_match'][1].append(jj)
                     # axs.plot([centroid[0], x1], [centroid[1], y1], linewidth=2, markersize=5)
                     c_sx = s_pts[0] - pts[0]
                     c_sy = s_pts[1] - pts[1]
@@ -604,25 +607,10 @@ def animate(g):
                         if run_cam_d:
                             radar_label, r_centroid, num_pts, cam_label, cam_box, cam_id = tracked_list[jj].get_prediction(
                                 camera=run_cam_d)
-                            if cam_id:
-                                c_track_id = max(cam_id, key=cam_id.count)
-                                # if jj == 8:
-                                #     print(f"id 8, {c_track_id}")
-                                #     print(len(radar_label))
-                                # if jj == 6:
-                                #     print(f"id 6, {c_track_id}")
-                                #     print(len(radar_label))
-                            else:
-                                c_track_id = None
                         else:
                             radar_label, r_centroid, num_pts = tracked_list[jj].get_prediction(
                                 camera=run_cam_d)
                         track_label = distance_weighted_voting_custom(radar_label, r_centroid, d_weight)
-
-                        if ii.ID and c_track_id:
-                            road_objects_c.append(c_track_id)
-                            road_objects_r.append(ii.ID)
-                        prev_track_list[jj] = [k, c_track_id, track_label]
                     else:
                         unconfirmed_track +=1
                         # axs.plot(centroid[0], centroid[1], marker="o", markersize=5)
@@ -659,25 +647,43 @@ def animate(g):
             # print(road_objects_c)
             # print(road_objects_r)
             for ii in detection_list:
-                # check if this camera id is in any of the tracks
+
+                # check if this camera id then radar id is in any of the tracks
                 in_track = False
                 ids = []
+
                 for jj, tk in enumerate(tracked_object_all):
+                    # record all track with the same radar or camera ID in ids array
                     if not tk.deleted:
                         if ii.cam_id and ii.cam_id in tk.c_id:
                             in_track = True
                             ids.append(jj)
+                            if ii.rad_id and ii.rad_id not in tk.r_id:
+                                tk.r_id.append(ii.rad_id)
+                            elif ii.rad_id and ii.rad_id in tk.r_id:
+                                tk.r_id.append(tk.r_id.pop(tk.r_id.index(ii.rad_id)))
                         elif ii.rad_id and ii.rad_id in tk.r_id:
                             in_track = True
                             ids.append(jj)
+                            if ii.cam_id and ii.cam_id not in tk.c_id:
+                                tk.c_id.append(ii.cam_id)
+                            elif ii.cam_id and ii.cam_id in tk.c_id:
+                                tk.c_id.append(tk.c_id.pop(tk.c_id.index(ii.cam_id)))
+                # if ii.cam_id in [31, 33, 44]:
+                #     print(ii.cam_id)
+                #     print(ii.rad_id)
+                #     print('_____')
                 if in_track:
+                    # merge all the track into one track
+                    keep_track = ids[0]
                     if len(ids) > 1:
-                        keep_track = ids[0]
                         for jj in ids[1:]:
-                            tracked_object_all[keep_track].c_id = \
-                                tracked_object_all[jj].c_id + tracked_object_all[keep_track].c_id
-                            tracked_object_all[keep_track].r_id = \
-                                tracked_object_all[jj].r_id + tracked_object_all[keep_track].r_id
+                            for jjj in tracked_object_all[jj].c_id:
+                                if jjj not in tracked_object_all[keep_track].c_id:
+                                    tracked_object_all[keep_track].c_id.insert(0, jjj)
+                            for jjj in tracked_object_all[jj].r_id:
+                                if jjj not in tracked_object_all[keep_track].r_id:
+                                    tracked_object_all[keep_track].r_id.insert(0, jjj)
                             tracked_object_all[jj].delete()
                     # if camera id is found
                     tracked_object_all[ids[0]].activate = ii.sensor
@@ -689,72 +695,107 @@ def animate(g):
             #
             # print(len(camera_ids))
             # print(len(tracked_object_all))
+            # print(camera_detection)
+            for ii in detection_list:
+                if ii.sensor in ['Both', 'Camera']:
+                    box = ii.cam_box
+                    py = min([box[1], box[3]])
+                    px = (box[0]+box[2])/2
+                    g_x, g_z = Cam2Ground(px, py, c2wcs)
+                    axs.scatter(-g_z, g_x, s=5)
+                    print([g_x, g_z])
+                    print(ii.centroid)
+
+            # for ii in camera_detection:
+            #     if ii[2] == 9:
+            #         # print(ii)
+            #         cv2.rectangle(image_np, (int(ii[0][0]), int(ii[0][1])), (int(ii[0][2]), int(ii[0][3])), color=(255,255,255))
+            #         cv2.imshow('0', image_np)
+            #         cv2.waitKey(0)
+            # print(outputs[0][:, 4])
+            font_size = 0.3
+            thickness = 1
+            # if np.asarray(outputs[0]).any():
+            #     print(outputs[0][:, 4])
             for ii, trk in enumerate(tracked_object_all):
-                if not trk.deleted and trk.activate:
-                    if trk.activate in ['Radar', 'Both', 'Radar_track'] and trk.r_id:
-                        r_id = trk.r_id[-1]
-                        r_trk = trackList[r_id]
-                        centroid = r_trk.xPost[:2]
-                        speed = r_trk.speed
-                        centroid_img = np.zeros((1, 4))
-                        centroid_img[:, 2] = centroid[0]
-                        centroid_img[:, 0] = centroid[1]
-                        centroid_img[:, 1] = 0
-                        pts = project_to_image(centroid_img.T, g2c_p).flatten()
-                        cv2.putText(im0, f'Fusion ID: {ii}', (
-                            int(pts[0] + 10), int(pts[1]) - 15),
-                                    cv2.FONT_HERSHEY_SIMPLEX,
-                                    0.5, (0, 255, 0), 1, cv2.LINE_AA)
-                        cv2.putText(im0, f'Radar_id: {r_trk.ID}', (
-                            int(pts[0] + 10), int(pts[1]) +15),
-                                    cv2.FONT_HERSHEY_SIMPLEX,
-                                    0.5, (0, 255, 0), 1, cv2.LINE_AA)
-                        cv2.putText(im0, f'Speed: {speed:.03g}km/h', (
-                            int(pts[0]) + 10, int(pts[1]) + 3),
-                                    cv2.FONT_HERSHEY_SIMPLEX,
-                                    0.5, (0, 255, 0), 1, cv2.LINE_AA)
-                        cv2.circle(im0, (int(pts[0]), int(pts[1])), 5, color=(0, 255, 0), thickness=2)
-                        if trk.c_id:
-                            cv2.putText(im0, f'camera_id: {trk.c_id[-1]}', (
-                                int(pts[0] + 10), int(pts[1]) + 25),
-                                        cv2.FONT_HERSHEY_SIMPLEX,
-                                        0.5, (0, 255, 0), 1, cv2.LINE_AA)
-                    elif trk.c_id:
-                        c_id = trk.c_id[-1]
-                        id= np.where(outputs[0][:, 4] == c_id)[0][0]
-                        bbox = outputs[0][id, :4]
-                        pts = [(bbox[2] - bbox[0]) / 2 + bbox[0], bbox[3] - 10]
-                        if not trk.r_id:
+                if True:
+                    if not trk.deleted and trk.activate:
+                        if trk.activate in ['Radar', 'Both', 'Radar_track'] and trk.r_id:
+                            r_id = trk.r_id
+                            r_trk = trackList[r_id[-1]]
+                            centroid = r_trk.xPost[:2]
+                            speed = r_trk.speed
+                            centroid_img = np.zeros((1, 4))
+                            centroid_img[:, 0] = centroid[0]
+                            centroid_img[:, 2] = centroid[1]
+                            centroid_img[:, 1] = 0
+                            pts = project_to_image(centroid_img.T, g2c_p).flatten()
                             cv2.putText(im0, f'Fusion ID: {ii}', (
-                                int(pts[0] + 10), int(pts[1])),
+                                int(pts[0] + 10), int(pts[1]) - 15),
                                         cv2.FONT_HERSHEY_SIMPLEX,
-                                        0.5, (0, 0, 255), 1, cv2.LINE_AA)
-                            cv2.circle(im0, (int(pts[0]), int(pts[1])), 5, color=(0, 0, 255), thickness=2)
-                            cv2.putText(im0, f'camera_id: {ii}', (
-                                int(pts[0] + 10), int(pts[1])+ 13),
+                                        font_size, (0, 255, 0), thickness, cv2.LINE_AA)
+                            cv2.putText(im0, f'Radar_id: {r_id}', (
+                                int(pts[0] + 10), int(pts[1]) +15),
                                         cv2.FONT_HERSHEY_SIMPLEX,
-                                        0.5, (0, 0, 255), 1, cv2.LINE_AA)
-                        if trk.r_id:
-                            r_id = trk.r_id[-1]
-                            speed = trackList[r_id].speed
-                            cv2.circle(im0, (int(pts[0]), int(pts[1])), 5, color=(0, 0, 255), thickness=2)
-                            cv2.putText(im0, f'Fusion ID: {ii}', (
-                                int(pts[0] + 10), int(pts[1])- 15),
-                                        cv2.FONT_HERSHEY_SIMPLEX,
-                                        0.5, (0, 255, 0), 1, cv2.LINE_AA)
-                            cv2.putText(im0, f'camera_id: {ii}', (
-                                int(pts[0] + 10), int(pts[1])+25),
-                                        cv2.FONT_HERSHEY_SIMPLEX,
-                                        0.5, (0, 0, 255), 1, cv2.LINE_AA)
+                                        font_size, (0, 255, 0), thickness, cv2.LINE_AA)
                             cv2.putText(im0, f'Speed: {speed:.03g}km/h', (
                                 int(pts[0]) + 10, int(pts[1]) + 3),
                                         cv2.FONT_HERSHEY_SIMPLEX,
-                                        0.5, (0, 0, 255), 1, cv2.LINE_AA)
-                            cv2.putText(im0, f'Radar_id: {r_id} (noD)', (
-                                int(pts[0] + 10), int(pts[1]) + 15),
-                                        cv2.FONT_HERSHEY_SIMPLEX,
-                                        0.5, (0, 0, 255), 1, cv2.LINE_AA)
-                    trk.activate = False
+                                        font_size, (0, 255, 0), 1, cv2.LINE_AA)
+                            cv2.circle(im0, (int(pts[0]), int(pts[1])), 5, color=(0, 255, 0), thickness=2)
+                            if trk.c_id:
+                                cv2.putText(im0, f'camera_id: {trk.c_id}', (
+                                    int(pts[0] + 10), int(pts[1]) + 25),
+                                            cv2.FONT_HERSHEY_SIMPLEX,
+                                            font_size, (0, 255, 0), thickness, cv2.LINE_AA)
+                            trk.life = 10
+                        elif trk.c_id:
+                            c_id = trk.c_id
+                            if c_id[-1] in outputs[0][:, 4]:
+                                id= np.where(outputs[0][:, 4] == c_id[-1])[0][0] # what?
+                                bbox = outputs[0][id, :4]
+                                pts = [(bbox[2] - bbox[0]) / 2 + bbox[0], bbox[3] - 10]
+                                if not trk.r_id:
+                                    cv2.putText(im0, f'Fusion ID: {ii}', (
+                                        int(pts[0] + 10), int(pts[1])),
+                                                cv2.FONT_HERSHEY_SIMPLEX,
+                                                font_size, (0, 0, 255), thickness, cv2.LINE_AA)
+                                    cv2.circle(im0, (int(pts[0]), int(pts[1])), 5, color=(0, 0, 255), thickness=2)
+                                    cv2.putText(im0, f'camera_id: {c_id}', (
+                                        int(pts[0] + 10), int(pts[1])+ 13),
+                                                cv2.FONT_HERSHEY_SIMPLEX,
+                                                font_size, (0, 0, 255), thickness, cv2.LINE_AA)
+                                if trk.r_id:
+                                    r_id = trk.r_id
+                                    speed = trackList[r_id[-1]].speed
+                                    cv2.circle(im0, (int(pts[0]), int(pts[1])), 5, color=(0, 0, 255), thickness=2)
+                                    cv2.putText(im0, f'Fusion ID: {ii}', (
+                                        int(pts[0] + 10), int(pts[1])- 15),
+                                                cv2.FONT_HERSHEY_SIMPLEX,
+                                                font_size, (0, 255, 0), thickness, cv2.LINE_AA)
+                                    cv2.putText(im0, f'camera_id: {c_id}', (
+                                        int(pts[0] + 10), int(pts[1])+25),
+                                                cv2.FONT_HERSHEY_SIMPLEX,
+                                                font_size, (0, 0, 255), thickness, cv2.LINE_AA)
+                                    cv2.putText(im0, f'Speed: {speed:.03g}km/h', (
+                                        int(pts[0]) + 10, int(pts[1]) + 3),
+                                                cv2.FONT_HERSHEY_SIMPLEX,
+                                                font_size, (0, 0, 255), thickness, cv2.LINE_AA)
+                                    cv2.putText(im0, f'Radar_id: {r_id} (noD)', (
+                                        int(pts[0] + 10), int(pts[1]) + 15),
+                                                cv2.FONT_HERSHEY_SIMPLEX,
+                                                font_size, (0, 0, 255), thickness, cv2.LINE_AA)
+                                    trk.life = 10
+                        trk.activate = False
+                # elif not trk.deleted:
+                #     trk.life -= 1
+                #     if trk.life == 0:
+                #         trk.delete()
+
+
+
+
+
             # print(outputs)
             # for jj, ii in enumerate(camera_ids):
             #     if ii not in matched_cameras:
@@ -814,8 +855,9 @@ def animate(g):
             # pickle.dump(c_list, open('c_list.pkl', 'wb'))
             # pickle.dump(pts_list, open('pts_list.pkl', 'wb'))
             # print(car_count)
-            image_np, cam_arr = render_radar_on_image(arr_g, image_np, g2c_p, 9000, 9000)
-            cv2.imshow('Camera', im0[:, 200:])
+
+            # image_np, cam_arr = render_radar_on_image(arr_g, image_np, g2c_p, 9000, 9000)
+            cv2.imshow('Camera', im0)
             # cv2.imshow('Camera', image_np)
             # cv2.imshow('Camera', C_M)
             cv2.waitKey(1)
