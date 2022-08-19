@@ -1,22 +1,16 @@
-import matplotlib
-import mayavi.mlab as mlab
-import sys
 
+#
+# import sys
+# import cv2
 import cv2
-
-sys.path.append('yolor')
-sys.path.append('SVSF_Track')
-#from yolor.detect_custom import init_yoloR, detect
-from SVSF_Track.MTT_Functions import *
+import numpy as np
 from radar_utils import *
-from projectutils import draw_radar
 import rosbag
-from matplotlib.animation import FuncAnimation
-from vis_util import *
+
 
 
 # Read recording
-bag = rosbag.Bag("record/rooftop.bag")
+bag = rosbag.Bag("record/working.bag")
 # bag = rosbag.Bag("record/traffic1.bag")
 topics = bag.get_type_and_topic_info()
 # old SORT tracker
@@ -65,7 +59,6 @@ def empty(v):
 
 
 cv2.setMouseCallback('Camera', get_img_local)
-fig = mlab.figure(size=(1000, 500), bgcolor=(0, 0, 0))
 calib_pts = []
 cam1 = np.empty((0,0))
 v = (-108.20802358222203, 7.280529894768495, 470.76425650815855, ([12.091, -1.047, -2.0325]))
@@ -173,8 +166,6 @@ for j, i in enumerate(bag.read_messages()):
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord('c'):
                     break
-            v = mlab.view()
-            mlab.clf()
         print(rx, ry, rz, tx, ty, tz)
         print('next frame')
 

@@ -30,7 +30,7 @@ matplotlib.use('TkAgg')
 import time
 # Read recording
 
-bag = rosbag.Bag("record/rooftop.bag")
+bag = rosbag.Bag("record/working.bag")
 # bag = rosbag.Bag("record/traffic3.bag")
 # bag = rosbag.Bag("record/traffic1.bag")
 topics = bag.get_type_and_topic_info()

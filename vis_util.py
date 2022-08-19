@@ -1,4 +1,6 @@
 import mayavi.mlab as mlab
+import cv2
+import numpy as np
 def draw_gt_boxes3d(gt_boxes3d, fig, color=(1, 1, 1)):
     """
     Draw 3D bounding boxes

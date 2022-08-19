@@ -2,6 +2,8 @@ import numpy
 import pickle
 import math
 import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('TkAgg')
 import numpy as np
 mes = pickle.load(open('extrinsic_meas.pkl', 'rb'))
 
