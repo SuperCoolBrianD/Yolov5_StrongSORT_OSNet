@@ -38,9 +38,6 @@ topics = bag.get_type_and_topic_info()
 # old SORT tracker
 # mot_tracker = sort.Sort(min_hits=2, max_age=8, iou_threshold=0.1)
 
-for i in topics[1]:
-    print(i)
-
 # init plt figure
 fig, axs = plt.subplots(1, figsize=(6, 6))
 fig.canvas.set_window_title('Radar Detection and Tracking IMM_small')
@@ -222,12 +219,14 @@ yolo_classes = ['car', 'bus', 'person', 'truck', 'no_match']
 # alpha = 22/180*np.pi
 
 # for remote dark
-rx = 1.61
+rx = 1.6
 ry = 0
-rz = 0.03
-tx = 0.01
+rz = 0.04
+tx = 0
 ty = 0
 tz = 0
+mtx_p = np.eye(4)
+mtx_p[:3, :3] = mtx
 height = 10.5
 alpha = (90-64)/180*np.pi
 r2c_e = extrinsic_matrix(rx, ry, rz, tx, ty, tz)
@@ -265,11 +264,20 @@ truck_count = 0
 #         [ 16.12903226, 118.83116883],])
 
 # For rooftop
-hull = np.array([[-18.70967742,  93.07359307],
-       [-34.19354839,  84.41558442],
-       [ -0.21505376,  16.45021645],
-       [ 14.83870968,  23.80952381],
-        [-18.70967742,  93.07359307],])
+# hull = np.array([[-18.70967742,  93.07359307],
+#        [-34.19354839,  84.41558442],
+#        [ -0.21505376,  16.45021645],
+#        [ 14.83870968,  23.80952381],
+#         [-18.70967742,  93.07359307],])
+# for remote
+hull = np.array([[-10.96774194,  58.44155844],
+       [ -3.65591398,  34.1991342 ],
+       [-10.53763441,  30.3030303 ],
+       [ -5.37634409,  24.24242424],
+       [ 15.69892473,  17.31601732],
+       [ 29.03225806,  34.63203463],
+       [ 18.70967742,  55.41125541],
+        [-10.96774194,  58.44155844]])
 
 in_zone = np.array([[-16.77419355,  24.02597403],
        [-13.22580645,  32.68398268],
@@ -350,26 +358,23 @@ def animate(g):
     global broken_radar_track, unconfirmed_track
     global path, zone_2, zone_1
     global start_list, prev_track_list, road_objects_c, road_objects_r, road_objects_dict, radar_id_count, radar_ids
+    global arr_all, pc, arr_concat, p_arr_all
     if idx <= 0:
         i = next(bg)
         # read ros Topic camera or radar
         idx+=1
     else:
         i = next(bg)
-        if run_cam_d:
-            sensor = frame.load_data(i)
-            if sensor == "/Radar":
-                rd = i.message.header.stamp.to_sec()
-        else:
-            sensor = frame.load_data_radar_only(i)
-        if run_cam_d:
-            frame_check = frame.full_data
-        else:
-            frame_check = frame.full_data and sensor == '/Radar'
-
-
+        sensor = frame.load_data(i)
+        if sensor == "/Radar":
+            npts = frame.radar.message.width
+            arr_all = pc2_numpy(frame.radar.message, npts)
+            # arr_concat = np.vstack((arr_all, p_arr_all))
+            arr_concat = arr_all
+            p_arr_all = arr_concat.copy()
+        frame_check = frame.full_data
         if frame_check:
-            ts = time.time()
+
             # print(abs(abs(rd- frame.radar.message.header.stamp.to_sec())))
             # rd = frame.radar.message.header.stamp.to_sec()
             # print(abs(abs(cd - frame.camera.message.header.stamp.to_sec())))
@@ -379,32 +384,28 @@ def animate(g):
             # print(frame.radar.message.header.stamp.to_sec())
             # print(frame.radar.message.header.stamp.to_sec()- epoch)
             # epoch = frame.radar.message.header.stamp.to_sec()
+            arr_c = transform_radar(arr_concat.T, r2c_e).T  # from radar to camera (not pixel)
+            arr_g = transform_radar(arr_c.T, c2g).T  # from camera to global
+            mask = path.contains_points(np.vstack((arr_g[:, 0], arr_g[:, 2])).T)
 
+            arr = arr_g[mask]
+            pc = arr[:, :4]
+            image_np = imgmsg_to_cv2(frame.camera.message)
             plt.cla()
             axs.set_xlim(-100, 100)
             axs.set_ylim(-100, 100)
             plt.plot(hull[:, 0], hull[:, 1], 'k-')
-            image_np = imgmsg_to_cv2(frame.camera.message)
-            npts = frame.radar.message.width
-            arr_all = pc2_numpy(frame.radar.message, npts)
-            arr_concat = np.vstack((arr_all, p_arr_all))
-            arr_c = transform_radar(arr_concat.T, r2c_e).T  # from radar to camera (not pixel)
-            arr_g = transform_radar(arr_c.T, c2g).T  # from camera to global
-            # axs.scatter(arr_g[:, 0], arr_g[:, 2], s=0.5, color='r')
-            # filter based on road mask
-            mask = path.contains_points(np.vstack((arr_g[:, 0], arr_g[:, 2])).T)
-            arr_c = arr_c[mask]
-            arr = arr_g[mask]
 
             # draw points on plt figure
             # axs.scatter(arr_g[:, 0], arr_g[:, 1], s=0.5)
             # arr = filter_zero(arr_g)
             #
             # draw points on plt figure
-            pc = arr[:, :4]
+
             # Perform class specific DBSCAN
             total_box, cls = dbscan_cluster(pc, eps=2.5, min_sample=15, axs=axs)
             total_box_1, cls_1 = dbscan_cluster(pc, eps=2, min_sample=2, axs=axs)
+
             if isinstance(cls, type(None)):
                 cls = []
             if isinstance(cls_1, type(None)):
@@ -439,8 +440,7 @@ def animate(g):
                     bbox = project_to_image(bbox, g2c_p)
                     pts = project_to_image(cc.T, g2c_p)
                     box2d = get_bbox_2d(pts.T)
-
-                    # cv2.rectangle(im0, box2d[0], box2d[1], (255, 255, 0))
+                    cv2.rectangle(im0, box2d[0], box2d[1], (255, 255, 0))
                     box2d = [box2d[0][0], box2d[0][1], box2d[1][0], box2d[1][1]]
                     box2d = convert_topy_bottomx(box2d)
                     radar_detection.append([cc, centroid, bbox, box2d])
@@ -455,8 +455,18 @@ def animate(g):
                 cam_2d = np.asarray([ii[0] for ii in camera_detection])
 
                 if cam_2d.any():
-                    radar_matched, camera_matched, ious, radar_unmatched, camera_unmatched = match_detection(radar_2d, cam_2d)
+                    # print(cam_2d[0])
+                    # print(convert_topy_bottomx([cam_2d[0][0], cam_2d[0][1], cam_2d[0][2], cam_2d[0][3]]))
+                    # for debugging
+                    # dis = image_np.copy()
+                    # for ii in cam_2d:
+                    #     cv2.rectangle(dis, (int(ii[0]), int(ii[1])), (int(ii[2]), int(ii[3])), (255, 255, 0))
+                    # for ii in radar_2d:
+                    #     cv2.rectangle(dis, (ii[0], ii[1]), (ii[2], ii[3]), (255, 255, 255))
+                    # cv2.imshow('dis', dis)
+                    # cv2.waitKey(100)
 
+                    radar_matched, camera_matched, ious, radar_unmatched, camera_unmatched = match_detection(radar_2d, cam_2d)
                     for ii in range(len(radar_matched)):
                         display = image_np.copy()
                         detection_list.append(DetectedObject(r_d=radar_detection[radar_matched[ii]], c_d=camera_detection[camera_matched[ii]]))
@@ -467,7 +477,7 @@ def animate(g):
                         # cv2.rectangle(display, (int(camera_detection[camera_matched[ii]][0][0]), int(camera_detection[camera_matched[ii]][0][1])),
                         #               (int(camera_detection[camera_matched[ii]][0][2]), int(camera_detection[camera_matched[ii]][0][3])), (255, 0, 0))
                         # cv2.imshow('0', display)
-                        # cv2.waitKey(1000)
+                        # cv2.waitKey(100)
                     for ii in radar_unmatched:
                         detection_list.append(DetectedObject(r_d=radar_detection[ii]))
                     for ii in camera_unmatched:
@@ -538,8 +548,9 @@ def animate(g):
                 # if jj in [4, 16, 29, 33]:
 
                 if not ii.endSample:
-                    axs.text(centroid[0], centroid[1] - 2, 'ID: ' + str(jj), fontsize=11,
-                             color='r')
+                    if jj == 28:
+                        axs.text(centroid[0], centroid[1] - 2, 'ID: ' + str(jj), fontsize=11,
+                                 color='r')
                     # axs.scatter(centroid[0], centroid[1], s=5, color='r')
                     if start_list[jj] == -1:
                         ii.ID = max(radar_ids) + 1
@@ -576,24 +587,39 @@ def animate(g):
                     s_img[:, 2] = -2
                     s_pts = project_to_image(s_img.T, g2c_p).flatten()
                     matched_measurement = match_measurement(detection_list, centroid)
+                    # if jj == 25:
+                    #     print(ii.c_ID)
                     if matched_measurement != None:
                         # if at the detection stage a camera was matched with the radar
                         if detection_list[matched_measurement].cam_id:
                             ii.c_ID.append(detection_list[matched_measurement].cam_id)
-                        detection_list[matched_measurement].rad_id = jj
+
                         tracked_list[jj].dets.append(detection_list[matched_measurement])
                         tracked_list[jj].start = k
+                        c_track_id = None
+                        if ii.c_ID:
+                            # the current radar track and camera ID
+                            if len(ii.c_ID) > 5:
+                                c_track_id = max(ii.c_ID[-5:], key=ii.c_ID.count)
+                            else:
+                                c_track_id = max(ii.c_ID, key=ii.c_ID.count)
+                            # mark the matched camera ID
+                            matched_cameras.append(c_track_id)
+                        detection_list[matched_measurement].rad_id = jj
+                        if not detection_list[matched_measurement].cam_id:
+                            detection_list[matched_measurement].cam_id = c_track_id
                     else:
-                        trk = DetectedObject(trk=[jj, centroid])
+                        c_track_id = None
+                        if ii.c_ID:
+                            # the current radar track and camera ID
+                            if len(ii.c_ID) > 5:
+                                c_track_id = max(ii.c_ID[-5:], key=ii.c_ID.count)
+                            else:
+                                c_track_id = max(ii.c_ID, key=ii.c_ID.count)
+                            # mark the matched camera ID
+                            matched_cameras.append(c_track_id)
+                        trk = DetectedObject(trk=[jj, centroid, c_track_id])
                         detection_list.append(trk)
-                    if ii.c_ID:
-                        # the current radar track and camera ID
-                        if len(ii.c_ID) > 5:
-                            c_track_id = max(ii.c_ID[-5:], key=ii.c_ID.count)
-                        else:
-                            c_track_id = max(ii.c_ID, key=ii.c_ID.count)
-                        # mark the matched camera ID
-                        matched_cameras.append(c_track_id)
                         # If this radar ID isn't matched with the camera previously add it
                     # axs.plot([centroid[0], x1], [centroid[1], y1], linewidth=2, markersize=5)
                     c_sx = s_pts[0] - pts[0]
@@ -658,14 +684,15 @@ def animate(g):
             # print(road_objects_c)
             # print(road_objects_r)
             for ii in detection_list:
-
                 # check if this camera id then radar id is in any of the tracks
                 in_track = False
                 ids = []
-
+                if ii.rad_id == 28:
+                    print(ii.cam_id)
                 for jj, tk in enumerate(tracked_object_all):
                     # record all track with the same radar or camera ID in ids array
                     if not tk.deleted:
+
                         if ii.cam_id and ii.cam_id in tk.c_id:
                             in_track = True
                             ids.append(jj)
@@ -680,22 +707,22 @@ def animate(g):
                                 tk.c_id.append(ii.cam_id)
                             elif ii.cam_id and ii.cam_id in tk.c_id:
                                 tk.c_id.append(tk.c_id.pop(tk.c_id.index(ii.cam_id)))
-                # if ii.cam_id in [31, 33, 44]:
+                # if ii.cam_id in [5]:
                 #     print(ii.cam_id)
                 #     print(ii.rad_id)
                 #     print('_____')
                 if in_track:
                     # merge all the track into one track
-                    keep_track = ids[0]
-                    if len(ids) > 1:
-                        for jj in ids[1:]:
-                            for jjj in tracked_object_all[jj].c_id:
-                                if jjj not in tracked_object_all[keep_track].c_id:
-                                    tracked_object_all[keep_track].c_id.insert(0, jjj)
-                            for jjj in tracked_object_all[jj].r_id:
-                                if jjj not in tracked_object_all[keep_track].r_id:
-                                    tracked_object_all[keep_track].r_id.insert(0, jjj)
-                            tracked_object_all[jj].delete()
+                    # keep_track = ids[0]
+                    # if len(ids) > 1:
+                    #     for jj in ids[1:]:
+                    #         for jjj in tracked_object_all[jj].c_id:
+                    #             if jjj not in tracked_object_all[keep_track].c_id:
+                    #                 tracked_object_all[keep_track].c_id.insert(0, jjj)
+                    #         for jjj in tracked_object_all[jj].r_id:
+                    #             if jjj not in tracked_object_all[keep_track].r_id:
+                    #                 tracked_object_all[keep_track].r_id.insert(0, jjj)
+                    #         tracked_object_all[jj].delete()
                     # if camera id is found
                     tracked_object_all[ids[0]].activate = ii.sensor
                     # add the radar id to this tracked object if not there
@@ -714,8 +741,8 @@ def animate(g):
                     px = (box[0]+box[2])/2
                     g_x, g_z = Cam2Ground(px, py, c2wcs)
                     axs.scatter(-g_z, g_x, s=5)
-                    print([g_x, g_z])
-                    print(ii.centroid)
+                    # print([g_x, g_z])
+                    # print(ii.centroid)
 
             # for ii in camera_detection:
             #     if ii[2] == 9:
@@ -798,6 +825,7 @@ def animate(g):
                                                 font_size, (0, 0, 255), thickness, cv2.LINE_AA)
                                     trk.life = 10
                         trk.activate = False
+
                 # elif not trk.deleted:
                 #     trk.life -= 1
                 #     if trk.life == 0:
@@ -867,7 +895,7 @@ def animate(g):
             # pickle.dump(pts_list, open('pts_list.pkl', 'wb'))
             # print(car_count)
 
-            # image_np, cam_arr = render_radar_on_image(arr_g, image_np, g2c_p, 9000, 9000)
+            im0, cam_arr = render_radar_on_image(arr_g, im0, g2c_p, 9000, 9000)
             cv2.imshow('Camera', im0)
             # cv2.imshow('Camera', image_np)
             # cv2.imshow('Camera', C_M)
@@ -882,6 +910,7 @@ def animate(g):
                     car_count += 1
             idx += 1
             p_arr_all = arr_all.copy()
+
             # print(car_count)
 
 

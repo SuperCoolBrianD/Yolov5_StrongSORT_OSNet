@@ -10,7 +10,7 @@ import rosbag
 
 
 # Read recording
-bag = rosbag.Bag("record/working.bag")
+bag = rosbag.Bag("record/remote.bag")
 # bag = rosbag.Bag("record/traffic1.bag")
 topics = bag.get_type_and_topic_info()
 # old SORT tracker
@@ -78,15 +78,21 @@ cv2.createTrackbar('rz', 'TrackBar', 0, 314, empty)
 cv2.createTrackbar('tx', 'TrackBar', 0, 100, empty)
 cv2.createTrackbar('ty', 'TrackBar', 0, 100, empty)
 cv2.createTrackbar('tz', 'TrackBar', 0, 100, empty)
-cv2.setTrackbarPos('rx', 'TrackBar', 158,)
+cv2.setTrackbarPos('rx', 'TrackBar', 160,)
 cv2.setTrackbarPos('ry', 'TrackBar', 0,)
-cv2.setTrackbarPos('rz', 'TrackBar', 162,)
-cv2.setTrackbarPos('tx', 'TrackBar', 57,)
+cv2.setTrackbarPos('rz', 'TrackBar', 160,)
+cv2.setTrackbarPos('tx', 'TrackBar', 50,)
 cv2.setTrackbarPos('ty', 'TrackBar', 50,)
 cv2.setTrackbarPos('tz', 'TrackBar', 50,)
 frame = SRS_data_frame()
 for j, i in enumerate(bag.read_messages()):
     sensor = frame.load_data(i)
+    if sensor == "/Radar":
+        npts = frame.radar.message.width
+        arr_all = pc2_numpy(frame.radar.message, npts)
+        # arr_concat = np.vstack((arr_all, p_arr_all))
+        arr_concat = arr_all
+        p_arr_all = arr_concat.copy()
 
     # print(idx)
     # print(sensor)
@@ -99,9 +105,6 @@ for j, i in enumerate(bag.read_messages()):
         # epoch = frame.radar.message.header.stamp.to_sec()
 
         image_np = imgmsg_to_cv2(frame.camera.message)
-        npts = frame.radar.message.width
-        arr_all = pc2_numpy(frame.radar.message, npts)
-        print(arr_all.shape)
         # print(np.max(arr_all[:, 0]))
         # print(np.max(arr_all[:, 1]))
         # print(np.max(arr_all[:, 2]))
@@ -130,27 +133,27 @@ for j, i in enumerate(bag.read_messages()):
         ty = cv2.getTrackbarPos('ty', 'TrackBar') / 10 - 5
         tz = cv2.getTrackbarPos('tz', 'TrackBar') / 10 - 5
 
-        if cls:
-            # for cc in cls:
-            #     draw_radar(arr_all, fig=fig, pts_scale=0.5, pts_color=(1, 1, 1), view=v)
-            #     bbox = get_bbox_cls(cc)
-            #     bbox = get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], 0)
-            #     draw_gt_boxes3d(bbox, fig=fig)
-            print('Adjust using trackbar, Press c for next frame')
-            while True:
-                # new_cam1 = cam1.copy()cccccccccccccc
-                rx = cv2.getTrackbarPos('rx', 'TrackBar') / 100
-                ry = cv2.getTrackbarPos('ry', 'TrackBar') / 100
-                rz = cv2.getTrackbarPos('rz', 'TrackBar') / 100 - 1.57
-                tx = cv2.getTrackbarPos('tx', 'TrackBar') / 10 - 5
-                ty = cv2.getTrackbarPos('ty', 'TrackBar') / 10 - 5
-                tz = cv2.getTrackbarPos('tz', 'TrackBar') / 10 - 5
-                r2c = cam_radar(rx, ry, rz, tx, ty, tz, mtx)
+        # for cc in cls:
+        #     draw_radar(arr_all, fig=fig, pts_scale=0.5, pts_color=(1, 1, 1), view=v)
+        #     bbox = get_bbox_cls(cc)
+        #     bbox = get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], 0)
+        #     draw_gt_boxes3d(bbox, fig=fig)
+        print('Adjust using trackbar, Press c for next frame')
+        while True:
+            # new_cam1 = cam1.copy()cccccccccccccc
+            rx = cv2.getTrackbarPos('rx', 'TrackBar') / 100
+            ry = cv2.getTrackbarPos('ry', 'TrackBar') / 100
+            rz = cv2.getTrackbarPos('rz', 'TrackBar') / 100 - 1.57
+            tx = cv2.getTrackbarPos('tx', 'TrackBar') / 10 - 5
+            ty = cv2.getTrackbarPos('ty', 'TrackBar') / 10 - 5
+            tz = cv2.getTrackbarPos('tz', 'TrackBar') / 10 - 5
+            r2c = cam_radar(rx, ry, rz, tx, ty, tz, mtx)
 
-                # extrinsic radar -> pixel coordinate
-                # radar -> camera coordinate
-                # radar_cam_coord -> rotx(alpha) * radar_cam_coord -> world coordinate with origin at radar (pitch about 5 degree)
-                new_cam1, cam_arr = render_radar_on_image(arr_all, image_np, r2c, 9000, 9000)
+            # extrinsic radar -> pixel coordinate
+            # radar -> camera coordinate
+            # radar_cam_coord -> rotx(alpha) * radar_cam_coord -> world coordinate with origin at radar (pitch about 5 degree)
+            new_cam1, cam_arr = render_radar_on_image(arr_all, image_np, r2c, 9000, 9000)
+            if cls:
                 for cc in cls:
                     bbox = get_bbox_cls(cc)
                     bbox = get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], 0)
@@ -162,10 +165,10 @@ for j, i in enumerate(bag.read_messages()):
                     cent = (int(cent[0, 0]), int(cent[1, 0]))
                     new_cam1 = cv2.circle(new_cam1, cent, 5, (255, 255, 0), thickness=2)
 
-                cv2.imshow('Camera', new_cam1)
-                key = cv2.waitKey(1) & 0xFF
-                if key == ord('c'):
-                    break
+            cv2.imshow('Camera', new_cam1)
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('c'):
+                break
         print(rx, ry, rz, tx, ty, tz)
         print('next frame')
 

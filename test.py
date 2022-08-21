@@ -1,9 +1,11 @@
-import torch
-import sys
-print('A', sys.version)
-print('B', torch.__version__)
-print('C', torch.cuda.is_available())
-print('D', torch.backends.cudnn.enabled)
-device = torch.device('cuda')
-print('E', torch.cuda.get_device_properties(device))
-print('F', torch.tensor([1.0, 2.0]).cuda())
+from radar_utils import *
+from auto_label_util import IOU
+
+img = [612, 242, 681, 296]
+radar = [[ 578,  220,  590,  222],
+    [1167,  140, 1185,  172],
+    [ 631,  275,  658,  290]]
+
+for i in radar:
+    iou = IOU(i, img)
+    print(iou)

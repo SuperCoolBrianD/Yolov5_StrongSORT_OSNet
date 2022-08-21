@@ -101,7 +101,7 @@ def find_gt(r_box, c_box, image=np.empty([])):
     return matched, max_iou
 
 
-def match_detection(r_box, c_box, iou_thres=0.3):
+def match_detection(r_box, c_box, iou_thres=0.1):
     iou_arr = np.zeros((r_box.shape[0], c_box.shape[0]))
     for i in range(r_box.shape[0]):
         for j in range(c_box.shape[0]):
@@ -115,17 +115,21 @@ def match_detection(r_box, c_box, iou_thres=0.3):
     radar_matched = []
     camera_matched = []
     ious = []
+    print(iou_arr.shape[0])
     for i in range(iou_arr.shape[0]):
         picked = np.argmax(iou_arr)
         picked = np.unravel_index(picked, iou_arr.shape)
         iou = iou_arr[picked[0], picked[1]]
-        if iou == 0:
+        print(picked)
+        print(iou)
+        if iou in [0, -1]:
             break
         ious.append(iou)
         radar_matched.append(picked[0])
         camera_matched.append(picked[1])
         iou_arr[picked[0], :] = -1
         iou_arr[:, picked[1]] = -1
+
     radar_unmatched = []
     for i in range(iou_arr.shape[0]):
         if i not in radar_matched:
@@ -134,7 +138,7 @@ def match_detection(r_box, c_box, iou_thres=0.3):
     for i in range(iou_arr.shape[1]):
         if i not in camera_matched:
             camera_unmatched.append(i)
-    return radar_matched, camera_matched, ious, radar_unmatched, camera_unmatched
+    return radar_matched, camera_matched, iou_arr, radar_unmatched, camera_unmatched
 
 
 def np2bin(pc):

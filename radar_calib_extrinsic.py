@@ -12,19 +12,24 @@ import rosbag
 import pickle
 
 # Read recording
-bag = rosbag.Bag("record/working.bag")
+bag = rosbag.Bag("record/remote.bag")
 # bag = rosbag.Bag("record/traffic1.bag")
 topics = bag.get_type_and_topic_info()
 
 # fig = mlab.figure(size=(1000, 500), bgcolor=(0, 0, 0))
-calib_pts = []
-cam1 = np.empty((0,0))
-v = (-108.20802358222203, 7.280529894768495, 470.76425650815855, ([12.091, -1.047, -2.0325]))
 
-rx = 1.56
+# rx = 1.56
+# ry = 0
+# rz = 0.050000000000000044
+# tx = 0.2999999999999998
+# ty = 0
+# tz = 0
+
+
+rx = 1.6
 ry = 0
-rz = 0.050000000000000044
-tx = 0.2999999999999998
+rz = 0.04
+tx = 0
 ty = 0
 tz = 0
 
@@ -41,7 +46,7 @@ r2c_e = extrinsic_matrix(rx, ry, rz, tx, ty, tz)
 frame = SRS_data_frame()
 mes = []
 for j, i in enumerate(bag.read_messages()):
-    if j == 1000:
+    if j == 5000:
         break
     sensor = frame.load_data(i)
     if frame.full_data:

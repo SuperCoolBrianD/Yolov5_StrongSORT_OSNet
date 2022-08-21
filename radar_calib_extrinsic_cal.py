@@ -33,7 +33,7 @@ for i, d1 in enumerate(mes):
         theta = math.sin(d2[1] / d2[3])
         if alpha > np.pi/4 and alpha-theta < np.pi/2:
             h = d2[3] * math.cos(alpha - theta)
-            d_list.append(alpha)
+            d_list.append(alpha*180/np.pi)
             h_list.append(h)
 
 # h_list = []

@@ -6,7 +6,7 @@ import rosbag
 from mpl_point_clicker import clicker
 
 # Read recording
-bag = rosbag.Bag("record/working.bag")
+bag = rosbag.Bag("record/remote.bag")
 # bag = rosbag.Bag("record/traffic1.bag")
 topics = bag.get_type_and_topic_info()
 mtx = np.array([[747.9932, 0., 655.5036],

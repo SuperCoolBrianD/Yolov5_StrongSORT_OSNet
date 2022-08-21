@@ -1,5 +1,5 @@
-# import matplotlib
-# matplotlib.use('TkAgg')
+import matplotlib
+matplotlib.use('TkAgg')
 # import mayavi.mlab as mlab
 import numpy as np
 import matplotlib.pyplot as plt
@@ -25,7 +25,6 @@ def project_to_image(points, proj_mat):
     pts = points[:3, :]
     # Change to homogenous coordinate
     pts = np.vstack((pts, np.ones((1, num_pts))))
-
     pts = proj_mat @ pts
     pts[:2, :] /= pts[2, :]
     points = np.vstack((pts[:2, :], points[3:, :]))
@@ -110,6 +109,18 @@ def c_extrinsic_matrix(rx, ry, rz, tx, ty, tz):
 
 
 def cam_radar(rx, ry, rz, tx, ty, tz, c):
+    cam_matrix = np.eye(4)
+    cam_matrix[:3, :3] = c
+    translate = extrinsic_matrix(0, 0, 0, tx, ty, tz)
+    rotate = extrinsic_matrix(rx, ry, rz, 0, 0, 0)
+    extrinsic = translate@rotate
+    print(extrinsic)
+    proj_radar2cam = cam_matrix@extrinsic
+
+    return proj_radar2cam
+
+
+def radar2cam_pixel(rx, ry, rz, tx, ty, tz, c):
     cam_matrix = np.eye(4)
     cam_matrix[:3, :3] = c
     extrinsic = extrinsic_matrix(rx, ry, rz, tx, ty, tz)
@@ -523,7 +534,7 @@ class DetectedObject:
             self.rad_label = None
             self.cam_label = None
             self.cam_box = None
-            self.cam_id = None
+            self.cam_id = trk[2]
             self.sensor = 'Radar_track'
             self.cam_rad_iou = None
             self.rad_id = trk[0]
