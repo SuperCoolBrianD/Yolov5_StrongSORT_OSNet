@@ -1,0 +1,34 @@
+[0.000000] (-) TimerEvent: {}
+[0.000408] (Cython-based reid evaluation code) JobQueued: {'identifier': 'Cython-based reid evaluation code', 'dependencies': OrderedDict()}
+[0.000688] (build_adjacency_matrix) JobQueued: {'identifier': 'build_adjacency_matrix', 'dependencies': OrderedDict()}
+[0.001805] (gnn_propagate) JobQueued: {'identifier': 'gnn_propagate', 'dependencies': OrderedDict()}
+[0.001882] (Cython-based reid evaluation code) JobStarted: {'identifier': 'Cython-based reid evaluation code'}
+[0.026297] (build_adjacency_matrix) JobStarted: {'identifier': 'build_adjacency_matrix'}
+[0.044588] (gnn_propagate) JobStarted: {'identifier': 'gnn_propagate'}
+[0.099805] (-) TimerEvent: {}
+[0.200159] (-) TimerEvent: {}
+[0.300464] (-) TimerEvent: {}
+[0.400758] (-) TimerEvent: {}
+[0.501018] (-) TimerEvent: {}
+[0.601277] (-) TimerEvent: {}
+[0.701618] (-) TimerEvent: {}
+[0.801976] (-) TimerEvent: {}
+[0.902238] (-) TimerEvent: {}
+[1.002529] (-) TimerEvent: {}
+[1.102843] (-) TimerEvent: {}
+[1.203136] (-) TimerEvent: {}
+[1.303402] (-) TimerEvent: {}
+[1.403703] (-) TimerEvent: {}
+[1.504016] (-) TimerEvent: {}
+[1.604347] (-) TimerEvent: {}
+[1.704708] (-) TimerEvent: {}
+[1.805068] (-) TimerEvent: {}
+[1.905372] (-) TimerEvent: {}
+[2.005676] (-) TimerEvent: {}
+[2.105977] (-) TimerEvent: {}
+[2.206234] (-) TimerEvent: {}
+[2.304674] (gnn_propagate) JobEnded: {'identifier': 'gnn_propagate', 'rc': 0}
+[2.305885] (Cython-based reid evaluation code) JobEnded: {'identifier': 'Cython-based reid evaluation code', 'rc': 'SIGINT'}
+[2.306297] (-) TimerEvent: {}
+[2.354209] (build_adjacency_matrix) JobEnded: {'identifier': 'build_adjacency_matrix', 'rc': 'SIGINT'}
+[2.364621] (-) EventReactorShutdown: {}

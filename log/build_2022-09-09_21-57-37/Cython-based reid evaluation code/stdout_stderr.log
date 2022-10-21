@@ -1,0 +1,21 @@
+running build
+running build_ext
+building 'rank_cy' extension
+creating /home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/Cython-based reid evaluation code/build
+creating /home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/Cython-based reid evaluation code/build/temp.linux-x86_64-3.8
+x86_64-linux-gnu-gcc -pthread -Wno-unused-result -Wsign-compare -DNDEBUG -g -fwrapv -O2 -Wall -g -fstack-protector-strong -Wformat -Werror=format-security -g -fwrapv -O2 -g -fstack-protector-strong -Wformat -Werror=format-security -Wdate-time -D_FORTIFY_SOURCE=2 -fPIC -I/usr/lib/python3/dist-packages/numpy/core/include -I/usr/include/python3.8 -c rank_cy.c -o /home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/Cython-based reid evaluation code/build/temp.linux-x86_64-3.8/rank_cy.o
+In file included from [01m[K/usr/lib/python3/dist-packages/numpy/core/include/numpy/ndarraytypes.h:1830[m[K,
+                 from [01m[K/usr/lib/python3/dist-packages/numpy/core/include/numpy/ndarrayobject.h:12[m[K,
+                 from [01m[K/usr/lib/python3/dist-packages/numpy/core/include/numpy/arrayobject.h:4[m[K,
+                 from [01m[Krank_cy.c:618[m[K:
+[01m[K/usr/lib/python3/dist-packages/numpy/core/include/numpy/npy_1_7_deprecated_api.h:17:2:[m[K [01;35m[Kwarning: [m[K#warning "Using deprecated NumPy API, disable it with " "#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION" [[01;35m[K-Wcpp[m[K]
+   17 | #[01;35m[Kwarning[m[K "Using deprecated NumPy API, disable it with " \
+      |  [01;35m[K^~~~~~~[m[K
+creating /home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/Cython-based reid evaluation code/build/lib.linux-x86_64-3.8
+x86_64-linux-gnu-gcc -pthread -shared -Wl,-O1 -Wl,-Bsymbolic-functions -Wl,-Bsymbolic-functions -Wl,-z,relro -g -fwrapv -O2 -Wl,-Bsymbolic-functions -Wl,-z,relro -g -fwrapv -O2 -g -fstack-protector-strong -Wformat -Werror=format-security -Wdate-time -D_FORTIFY_SOURCE=2 /home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/Cython-based reid evaluation code/build/temp.linux-x86_64-3.8/rank_cy.o -o /home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/Cython-based reid evaluation code/build/lib.linux-x86_64-3.8/rank_cy.cpython-38-x86_64-linux-gnu.so
+running install
+running install_lib
+copying /home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/Cython-based reid evaluation code/build/lib.linux-x86_64-3.8/rank_cy.cpython-38-x86_64-linux-gnu.so -> /home/bd/radar_live/src/radar_detection_node/radar_detection_node/install/Cython-based reid evaluation code/lib/python3.8/site-packages
+running install_egg_info
+Writing /home/bd/radar_live/src/radar_detection_node/radar_detection_node/install/Cython-based reid evaluation code/lib/python3.8/site-packages/Cython_based_reid_evaluation_code-0.0.0-py3.8.egg-info
+writing list of installed files to '/home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/Cython-based reid evaluation code/install.log'

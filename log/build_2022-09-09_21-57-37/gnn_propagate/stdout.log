@@ -1,0 +1,17 @@
+running develop
+running egg_info
+creating gnn_propagate.egg-info
+writing gnn_propagate.egg-info/PKG-INFO
+writing dependency_links to gnn_propagate.egg-info/dependency_links.txt
+writing top-level names to gnn_propagate.egg-info/top_level.txt
+writing manifest file 'gnn_propagate.egg-info/SOURCES.txt'
+reading manifest file 'gnn_propagate.egg-info/SOURCES.txt'
+writing manifest file 'gnn_propagate.egg-info/SOURCES.txt'
+running build_ext
+building 'gnn_propagate' extension
+creating /home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/gnn_propagate/build
+creating /home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/gnn_propagate/build/temp.linux-x86_64-3.8
+Emitting ninja build file /home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/gnn_propagate/build/temp.linux-x86_64-3.8/build.ninja...
+Compiling objects...
+Allowing ninja to set a default number of workers... (overridable by setting the environment variable MAX_JOBS=N)
+ninja: error: '/home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/gnn_propagate/gnn_propagate.cpp', needed by '/home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/gnn_propagate/build/temp.linux-x86_64-3.8/gnn_propagate.o', missing and no known rule to make it

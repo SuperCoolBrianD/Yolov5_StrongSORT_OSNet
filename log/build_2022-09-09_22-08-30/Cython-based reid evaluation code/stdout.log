@@ -1,0 +1,8 @@
+running build
+running build_ext
+running install
+running install_lib
+running install_egg_info
+Removing /home/bd/radar_live/src/radar_detection_node/radar_detection_node/install/Cython-based reid evaluation code/lib/python3.8/site-packages/Cython_based_reid_evaluation_code-0.0.0-py3.8.egg-info
+Writing /home/bd/radar_live/src/radar_detection_node/radar_detection_node/install/Cython-based reid evaluation code/lib/python3.8/site-packages/Cython_based_reid_evaluation_code-0.0.0-py3.8.egg-info
+writing list of installed files to '/home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/Cython-based reid evaluation code/install.log'

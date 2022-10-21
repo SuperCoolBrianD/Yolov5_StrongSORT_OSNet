@@ -1,0 +1,66 @@
+running develop
+running egg_info
+writing build_adjacency_matrix.egg-info/PKG-INFO
+writing dependency_links to build_adjacency_matrix.egg-info/dependency_links.txt
+writing top-level names to build_adjacency_matrix.egg-info/top_level.txt
+reading manifest file 'build_adjacency_matrix.egg-info/SOURCES.txt'
+writing manifest file 'build_adjacency_matrix.egg-info/SOURCES.txt'
+running build_ext
+building 'build_adjacency_matrix' extension
+Emitting ninja build file /home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/build_adjacency_matrix/build/temp.linux-x86_64-3.8/build.ninja...
+Compiling objects...
+Allowing ninja to set a default number of workers... (overridable by setting the environment variable MAX_JOBS=N)
+ninja: error: '/home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/build_adjacency_matrix/build_adjacency_matrix.cpp', needed by '/home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/build_adjacency_matrix/build/temp.linux-x86_64-3.8/build_adjacency_matrix.o', missing and no known rule to make it
+Traceback (most recent call last):
+  File "/home/bd/.local/lib/python3.8/site-packages/torch/utils/cpp_extension.py", line 1533, in _run_ninja_build
+    subprocess.run(
+  File "/usr/lib/python3.8/subprocess.py", line 516, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['ninja', '-v']' returned non-zero exit status 1.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "setup.py", line 25, in <module>
+    setup(
+  File "/home/bd/.local/lib/python3.8/site-packages/setuptools/__init__.py", line 153, in setup
+    return distutils.core.setup(**attrs)
+  File "/usr/lib/python3.8/distutils/core.py", line 148, in setup
+    dist.run_commands()
+  File "/usr/lib/python3.8/distutils/dist.py", line 966, in run_commands
+    self.run_command(cmd)
+  File "/usr/lib/python3.8/distutils/dist.py", line 985, in run_command
+    cmd_obj.run()
+  File "/home/bd/.local/lib/python3.8/site-packages/setuptools/command/develop.py", line 34, in run
+    self.install_for_development()
+  File "/home/bd/.local/lib/python3.8/site-packages/setuptools/command/develop.py", line 114, in install_for_development
+    self.run_command('build_ext')
+  File "/usr/lib/python3.8/distutils/cmd.py", line 313, in run_command
+    self.distribution.run_command(command)
+  File "/usr/lib/python3.8/distutils/dist.py", line 985, in run_command
+    cmd_obj.run()
+  File "/home/bd/.local/lib/python3.8/site-packages/setuptools/command/build_ext.py", line 79, in run
+    _build_ext.run(self)
+  File "/usr/lib/python3/dist-packages/Cython/Distutils/old_build_ext.py", line 186, in run
+    _build_ext.build_ext.run(self)
+  File "/usr/lib/python3.8/distutils/command/build_ext.py", line 340, in run
+    self.build_extensions()
+  File "/home/bd/.local/lib/python3.8/site-packages/torch/utils/cpp_extension.py", line 670, in build_extensions
+    build_ext.build_extensions(self)
+  File "/usr/lib/python3/dist-packages/Cython/Distutils/old_build_ext.py", line 195, in build_extensions
+    _build_ext.build_ext.build_extensions(self)
+  File "/usr/lib/python3.8/distutils/command/build_ext.py", line 449, in build_extensions
+    self._build_extensions_serial()
+  File "/usr/lib/python3.8/distutils/command/build_ext.py", line 474, in _build_extensions_serial
+    self.build_extension(ext)
+  File "/home/bd/.local/lib/python3.8/site-packages/setuptools/command/build_ext.py", line 202, in build_extension
+    _build_ext.build_extension(self, ext)
+  File "/usr/lib/python3.8/distutils/command/build_ext.py", line 528, in build_extension
+    objects = self.compiler.compile(sources,
+  File "/home/bd/.local/lib/python3.8/site-packages/torch/utils/cpp_extension.py", line 491, in unix_wrap_ninja_compile
+    _write_ninja_file_and_compile_objects(
+  File "/home/bd/.local/lib/python3.8/site-packages/torch/utils/cpp_extension.py", line 1250, in _write_ninja_file_and_compile_objects
+    _run_ninja_build(
+  File "/home/bd/.local/lib/python3.8/site-packages/torch/utils/cpp_extension.py", line 1555, in _run_ninja_build
+    raise RuntimeError(message) from e
+RuntimeError: Error compiling objects for extension

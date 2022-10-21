@@ -1,0 +1,67 @@
+[3.541s] Invoking command in '/home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/gnn_propagate': CONDA_PROMPT_MODIFIER=(SRS_Yolo) PYTHONPATH=/home/bd/radar_live/src/radar_detection_node/radar_detection_node/install/gnn_propagate/lib/python3.8/site-packages:${PYTHONPATH} /usr/bin/python3 setup.py develop --prefix /home/bd/radar_live/src/radar_detection_node/radar_detection_node/install/gnn_propagate --editable --build-directory /home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/gnn_propagate/build --no-deps
+[4.422s] running develop
+[4.594s] running egg_info
+[4.594s] writing gnn_propagate.egg-info/PKG-INFO
+[4.594s] writing dependency_links to gnn_propagate.egg-info/dependency_links.txt
+[4.594s] writing top-level names to gnn_propagate.egg-info/top_level.txt
+[4.685s] reading manifest file 'gnn_propagate.egg-info/SOURCES.txt'
+[4.686s] writing manifest file 'gnn_propagate.egg-info/SOURCES.txt'
+[4.686s] running build_ext
+[4.699s] building 'gnn_propagate' extension
+[4.785s] Emitting ninja build file /home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/gnn_propagate/build/temp.linux-x86_64-3.8/build.ninja...
+[4.785s] Compiling objects...
+[4.785s] Allowing ninja to set a default number of workers... (overridable by setting the environment variable MAX_JOBS=N)
+[4.860s] ninja: error: '/home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/gnn_propagate/gnn_propagate.cpp', needed by '/home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/gnn_propagate/build/temp.linux-x86_64-3.8/gnn_propagate.o', missing and no known rule to make it
+[4.967s] Traceback (most recent call last):
+[4.967s]   File "/home/bd/.local/lib/python3.8/site-packages/torch/utils/cpp_extension.py", line 1533, in _run_ninja_build
+[4.967s]     subprocess.run(
+[4.967s]   File "/usr/lib/python3.8/subprocess.py", line 516, in run
+[4.967s]     raise CalledProcessError(retcode, process.args,
+[4.967s] subprocess.CalledProcessError: Command '['ninja', '-v']' returned non-zero exit status 1.
+[4.967s] 
+[4.967s] The above exception was the direct cause of the following exception:
+[4.968s] 
+[4.968s] Traceback (most recent call last):
+[4.968s]   File "setup.py", line 25, in <module>
+[4.968s]     setup(
+[4.968s]   File "/home/bd/.local/lib/python3.8/site-packages/setuptools/__init__.py", line 153, in setup
+[4.968s]     return distutils.core.setup(**attrs)
+[4.968s]   File "/usr/lib/python3.8/distutils/core.py", line 148, in setup
+[4.968s]     dist.run_commands()
+[4.968s]   File "/usr/lib/python3.8/distutils/dist.py", line 966, in run_commands
+[4.968s]     self.run_command(cmd)
+[4.968s]   File "/usr/lib/python3.8/distutils/dist.py", line 985, in run_command
+[4.968s]     cmd_obj.run()
+[4.968s]   File "/home/bd/.local/lib/python3.8/site-packages/setuptools/command/develop.py", line 34, in run
+[4.969s]     self.install_for_development()
+[4.969s]   File "/home/bd/.local/lib/python3.8/site-packages/setuptools/command/develop.py", line 114, in install_for_development
+[4.969s]     self.run_command('build_ext')
+[4.969s]   File "/usr/lib/python3.8/distutils/cmd.py", line 313, in run_command
+[4.969s]     self.distribution.run_command(command)
+[4.969s]   File "/usr/lib/python3.8/distutils/dist.py", line 985, in run_command
+[4.969s]     cmd_obj.run()
+[4.969s]   File "/home/bd/.local/lib/python3.8/site-packages/setuptools/command/build_ext.py", line 79, in run
+[4.969s]     _build_ext.run(self)
+[4.969s]   File "/usr/lib/python3/dist-packages/Cython/Distutils/old_build_ext.py", line 186, in run
+[4.969s]     _build_ext.build_ext.run(self)
+[4.969s]   File "/usr/lib/python3.8/distutils/command/build_ext.py", line 340, in run
+[4.969s]     self.build_extensions()
+[4.970s]   File "/home/bd/.local/lib/python3.8/site-packages/torch/utils/cpp_extension.py", line 670, in build_extensions
+[4.970s]     build_ext.build_extensions(self)
+[4.970s]   File "/usr/lib/python3/dist-packages/Cython/Distutils/old_build_ext.py", line 195, in build_extensions
+[4.970s]     _build_ext.build_ext.build_extensions(self)
+[4.970s]   File "/usr/lib/python3.8/distutils/command/build_ext.py", line 449, in build_extensions
+[4.970s]     self._build_extensions_serial()
+[4.970s]   File "/usr/lib/python3.8/distutils/command/build_ext.py", line 474, in _build_extensions_serial
+[4.970s]     self.build_extension(ext)
+[4.970s]   File "/home/bd/.local/lib/python3.8/site-packages/setuptools/command/build_ext.py", line 202, in build_extension
+[4.970s]     _build_ext.build_extension(self, ext)
+[4.970s]   File "/usr/lib/python3.8/distutils/command/build_ext.py", line 528, in build_extension
+[4.970s]     objects = self.compiler.compile(sources,
+[4.970s]   File "/home/bd/.local/lib/python3.8/site-packages/torch/utils/cpp_extension.py", line 491, in unix_wrap_ninja_compile
+[4.970s]     _write_ninja_file_and_compile_objects(
+[4.971s]   File "/home/bd/.local/lib/python3.8/site-packages/torch/utils/cpp_extension.py", line 1250, in _write_ninja_file_and_compile_objects
+[4.971s]     _run_ninja_build(
+[4.971s]   File "/home/bd/.local/lib/python3.8/site-packages/torch/utils/cpp_extension.py", line 1555, in _run_ninja_build
+[4.971s]     raise RuntimeError(message) from e
+[4.971s] RuntimeError: Error compiling objects for extension

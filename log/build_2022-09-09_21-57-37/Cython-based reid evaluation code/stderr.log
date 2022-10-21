@@ -1,0 +1,7 @@
+In file included from [01m[K/usr/lib/python3/dist-packages/numpy/core/include/numpy/ndarraytypes.h:1830[m[K,
+                 from [01m[K/usr/lib/python3/dist-packages/numpy/core/include/numpy/ndarrayobject.h:12[m[K,
+                 from [01m[K/usr/lib/python3/dist-packages/numpy/core/include/numpy/arrayobject.h:4[m[K,
+                 from [01m[Krank_cy.c:618[m[K:
+[01m[K/usr/lib/python3/dist-packages/numpy/core/include/numpy/npy_1_7_deprecated_api.h:17:2:[m[K [01;35m[Kwarning: [m[K#warning "Using deprecated NumPy API, disable it with " "#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION" [[01;35m[K-Wcpp[m[K]
+   17 | #[01;35m[Kwarning[m[K "Using deprecated NumPy API, disable it with " \
+      |  [01;35m[K^~~~~~~[m[K

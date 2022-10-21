@@ -9,7 +9,7 @@ import numpy as np
 from math import*
 from scipy.stats.distributions import chi2
 from scipy import linalg
-from track import*
+from .track import*
 
 
 class track_MM:

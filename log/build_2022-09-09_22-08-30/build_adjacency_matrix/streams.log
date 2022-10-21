@@ -1,0 +1,68 @@
+[2.657s] Invoking command in '/home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/build_adjacency_matrix': CONDA_PROMPT_MODIFIER=(SRS_Yolo) PYTHONPATH=/home/bd/radar_live/src/radar_detection_node/radar_detection_node/install/build_adjacency_matrix/lib/python3.8/site-packages:${PYTHONPATH} /usr/bin/python3 setup.py develop --prefix /home/bd/radar_live/src/radar_detection_node/radar_detection_node/install/build_adjacency_matrix --editable --build-directory /home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/build_adjacency_matrix/build --no-deps
+[3.603s] running develop
+[3.779s] running egg_info
+[3.779s] writing build_adjacency_matrix.egg-info/PKG-INFO
+[3.779s] writing dependency_links to build_adjacency_matrix.egg-info/dependency_links.txt
+[3.780s] writing top-level names to build_adjacency_matrix.egg-info/top_level.txt
+[3.863s] reading manifest file 'build_adjacency_matrix.egg-info/SOURCES.txt'
+[3.864s] writing manifest file 'build_adjacency_matrix.egg-info/SOURCES.txt'
+[3.864s] running build_ext
+[3.878s] building 'build_adjacency_matrix' extension
+[3.965s] Emitting ninja build file /home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/build_adjacency_matrix/build/temp.linux-x86_64-3.8/build.ninja...
+[3.965s] Compiling objects...
+[3.965s] Allowing ninja to set a default number of workers... (overridable by setting the environment variable MAX_JOBS=N)
+[4.067s] ninja: error: '/home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/build_adjacency_matrix/build_adjacency_matrix.cpp', needed by '/home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/build_adjacency_matrix/build/temp.linux-x86_64-3.8/build_adjacency_matrix.o', missing and no known rule to make it
+[4.187s] Traceback (most recent call last):
+[4.187s]   File "/home/bd/.local/lib/python3.8/site-packages/torch/utils/cpp_extension.py", line 1533, in _run_ninja_build
+[4.187s]     subprocess.run(
+[4.188s]   File "/usr/lib/python3.8/subprocess.py", line 516, in run
+[4.188s]     raise CalledProcessError(retcode, process.args,
+[4.188s] subprocess.CalledProcessError: Command '['ninja', '-v']' returned non-zero exit status 1.
+[4.188s] 
+[4.188s] The above exception was the direct cause of the following exception:
+[4.188s] 
+[4.188s] Traceback (most recent call last):
+[4.188s]   File "setup.py", line 25, in <module>
+[4.188s]     setup(
+[4.188s]   File "/home/bd/.local/lib/python3.8/site-packages/setuptools/__init__.py", line 153, in setup
+[4.189s]     return distutils.core.setup(**attrs)
+[4.189s]   File "/usr/lib/python3.8/distutils/core.py", line 148, in setup
+[4.189s]     dist.run_commands()
+[4.189s]   File "/usr/lib/python3.8/distutils/dist.py", line 966, in run_commands
+[4.189s]     self.run_command(cmd)
+[4.189s]   File "/usr/lib/python3.8/distutils/dist.py", line 985, in run_command
+[4.189s]     cmd_obj.run()
+[4.189s]   File "/home/bd/.local/lib/python3.8/site-packages/setuptools/command/develop.py", line 34, in run
+[4.189s]     self.install_for_development()
+[4.189s]   File "/home/bd/.local/lib/python3.8/site-packages/setuptools/command/develop.py", line 114, in install_for_development
+[4.189s]     self.run_command('build_ext')
+[4.189s]   File "/usr/lib/python3.8/distutils/cmd.py", line 313, in run_command
+[4.189s]     self.distribution.run_command(command)
+[4.190s]   File "/usr/lib/python3.8/distutils/dist.py", line 985, in run_command
+[4.190s]     cmd_obj.run()
+[4.190s]   File "/home/bd/.local/lib/python3.8/site-packages/setuptools/command/build_ext.py", line 79, in run
+[4.190s]     _build_ext.run(self)
+[4.190s]   File "/usr/lib/python3/dist-packages/Cython/Distutils/old_build_ext.py", line 186, in run
+[4.190s]     _build_ext.build_ext.run(self)
+[4.190s]   File "/usr/lib/python3.8/distutils/command/build_ext.py", line 340, in run
+[4.190s]     self.build_extensions()
+[4.190s]   File "/home/bd/.local/lib/python3.8/site-packages/torch/utils/cpp_extension.py", line 670, in build_extensions
+[4.190s]     build_ext.build_extensions(self)
+[4.190s]   File "/usr/lib/python3/dist-packages/Cython/Distutils/old_build_ext.py", line 195, in build_extensions
+[4.190s]     _build_ext.build_ext.build_extensions(self)
+[4.190s]   File "/usr/lib/python3.8/distutils/command/build_ext.py", line 449, in build_extensions
+[4.191s]     self._build_extensions_serial()
+[4.191s]   File "/usr/lib/python3.8/distutils/command/build_ext.py", line 474, in _build_extensions_serial
+[4.191s]     self.build_extension(ext)
+[4.191s]   File "/home/bd/.local/lib/python3.8/site-packages/setuptools/command/build_ext.py", line 202, in build_extension
+[4.191s]     _build_ext.build_extension(self, ext)
+[4.191s]   File "/usr/lib/python3.8/distutils/command/build_ext.py", line 528, in build_extension
+[4.191s]     objects = self.compiler.compile(sources,
+[4.191s]   File "/home/bd/.local/lib/python3.8/site-packages/torch/utils/cpp_extension.py", line 491, in unix_wrap_ninja_compile
+[4.191s]     _write_ninja_file_and_compile_objects(
+[4.191s]   File "/home/bd/.local/lib/python3.8/site-packages/torch/utils/cpp_extension.py", line 1250, in _write_ninja_file_and_compile_objects
+[4.191s]     _run_ninja_build(
+[4.191s]   File "/home/bd/.local/lib/python3.8/site-packages/torch/utils/cpp_extension.py", line 1555, in _run_ninja_build
+[4.191s]     raise RuntimeError(message) from e
+[4.192s] RuntimeError: Error compiling objects for extension
+[4.303s] Invoked command in '/home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/build_adjacency_matrix' returned '1': CONDA_PROMPT_MODIFIER=(SRS_Yolo) PYTHONPATH=/home/bd/radar_live/src/radar_detection_node/radar_detection_node/install/build_adjacency_matrix/lib/python3.8/site-packages:${PYTHONPATH} /usr/bin/python3 setup.py develop --prefix /home/bd/radar_live/src/radar_detection_node/radar_detection_node/install/build_adjacency_matrix --editable --build-directory /home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/build_adjacency_matrix/build --no-deps

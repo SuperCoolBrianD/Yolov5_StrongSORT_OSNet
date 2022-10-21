@@ -1,0 +1,22 @@
+[2.593s] Invoking command in '/home/bd/radar_live/src/radar_detection_node/radar_detection_node/Yolov5_StrongSORT_OSNet/strong_sort/deep/reid/torchreid/metrics/rank_cylib': CONDA_PROMPT_MODIFIER=(SRS_Yolo) PYTHONPATH=/home/bd/radar_live/src/radar_detection_node/radar_detection_node/install/Cython-based reid evaluation code/lib/python3.8/site-packages:${PYTHONPATH} /usr/bin/python3 setup.py build --build-base /home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/Cython-based reid evaluation code/build install --prefix /home/bd/radar_live/src/radar_detection_node/radar_detection_node/install/Cython-based reid evaluation code --record /home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/Cython-based reid evaluation code/install.log
+[3.013s] running build
+[3.014s] running build_ext
+[3.019s] building 'rank_cy' extension
+[3.019s] creating /home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/Cython-based reid evaluation code/build
+[3.019s] creating /home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/Cython-based reid evaluation code/build/temp.linux-x86_64-3.8
+[3.019s] x86_64-linux-gnu-gcc -pthread -Wno-unused-result -Wsign-compare -DNDEBUG -g -fwrapv -O2 -Wall -g -fstack-protector-strong -Wformat -Werror=format-security -g -fwrapv -O2 -g -fstack-protector-strong -Wformat -Werror=format-security -Wdate-time -D_FORTIFY_SOURCE=2 -fPIC -I/usr/lib/python3/dist-packages/numpy/core/include -I/usr/include/python3.8 -c rank_cy.c -o /home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/Cython-based reid evaluation code/build/temp.linux-x86_64-3.8/rank_cy.o
+[3.092s] In file included from [01m[K/usr/lib/python3/dist-packages/numpy/core/include/numpy/ndarraytypes.h:1830[m[K,
+[3.092s]                  from [01m[K/usr/lib/python3/dist-packages/numpy/core/include/numpy/ndarrayobject.h:12[m[K,
+[3.092s]                  from [01m[K/usr/lib/python3/dist-packages/numpy/core/include/numpy/arrayobject.h:4[m[K,
+[3.092s]                  from [01m[Krank_cy.c:618[m[K:
+[3.092s] [01m[K/usr/lib/python3/dist-packages/numpy/core/include/numpy/npy_1_7_deprecated_api.h:17:2:[m[K [01;35m[Kwarning: [m[K#warning "Using deprecated NumPy API, disable it with " "#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION" [[01;35m[K-Wcpp[m[K]
+[3.092s]    17 | #[01;35m[Kwarning[m[K "Using deprecated NumPy API, disable it with " \
+[3.092s]       |  [01;35m[K^~~~~~~[m[K
+[7.458s] creating /home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/Cython-based reid evaluation code/build/lib.linux-x86_64-3.8
+[7.458s] x86_64-linux-gnu-gcc -pthread -shared -Wl,-O1 -Wl,-Bsymbolic-functions -Wl,-Bsymbolic-functions -Wl,-z,relro -g -fwrapv -O2 -Wl,-Bsymbolic-functions -Wl,-z,relro -g -fwrapv -O2 -g -fstack-protector-strong -Wformat -Werror=format-security -Wdate-time -D_FORTIFY_SOURCE=2 /home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/Cython-based reid evaluation code/build/temp.linux-x86_64-3.8/rank_cy.o -o /home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/Cython-based reid evaluation code/build/lib.linux-x86_64-3.8/rank_cy.cpython-38-x86_64-linux-gnu.so
+[7.508s] running install
+[7.508s] running install_lib
+[7.509s] copying /home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/Cython-based reid evaluation code/build/lib.linux-x86_64-3.8/rank_cy.cpython-38-x86_64-linux-gnu.so -> /home/bd/radar_live/src/radar_detection_node/radar_detection_node/install/Cython-based reid evaluation code/lib/python3.8/site-packages
+[7.511s] running install_egg_info
+[7.512s] Writing /home/bd/radar_live/src/radar_detection_node/radar_detection_node/install/Cython-based reid evaluation code/lib/python3.8/site-packages/Cython_based_reid_evaluation_code-0.0.0-py3.8.egg-info
+[7.512s] writing list of installed files to '/home/bd/radar_live/src/radar_detection_node/radar_detection_node/build/Cython-based reid evaluation code/install.log'
