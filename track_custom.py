@@ -50,6 +50,7 @@ def load_weight_sort(device, config_file, half=False, yolo_weights=WEIGHTS / 'yo
     stride, names, pt = model.stride, model.names, model.pt
     imgsz = check_img_size(imgsz, s=stride)  # check image size
     cfg = get_config()
+    print(config_file)
     cfg.merge_from_file(config_file)
     strongsort_list = []
     for i in range(nr_sources):
@@ -140,8 +141,8 @@ def process_track(im, idx, curr_frames, prev_frames, outputs,
                     cls = output[5]
                     c = int(cls)  # integer class
                     id = int(id)  # integer id
-                    # label = f'{id} {conf:.2f} {names[c]}'
-                    label = f'{id}'
+                    label = f'{id} {conf:.2f} {names[c]}'
+                    # label = f'{id}'
 
                     dets.append([bboxes, names[c], id, float(conf)])
                     annotator.box_label(bboxes, label, color=colors(c, True))
@@ -150,7 +151,7 @@ def process_track(im, idx, curr_frames, prev_frames, outputs,
 
         else:
             strongsort_list[i].increment_ages()
-            LOGGER.info('No detections')
+            # LOGGER.info('No detections')
 
         # Stream results
         im0 = annotator.result()
