@@ -1,0 +1,16 @@
+# pip install -qr requirements.txt
+mayavi
+Cython
+matplotlib>=3.2.2
+numpy>=1.18.5
+opencv-python>=4.1.2.30
+Pillow
+PyYAML>=5.3.1
+scipy>=1.4.1
+
+tqdm>=4.41.0
+thop  # FLOPS computation
+pycocotools==2.0  # COCO mAP
+
+#install torch version 1.10.0+cu111 only if using dell laptop
+#pip install torch==1.10.0+cu111 torchvision==0.11.0+cu111 torchaudio==0.10.0 -f https://download.pytorch.org/whl/torch_stable.html
