@@ -14,7 +14,7 @@ sys.path.append('yolor')
 sys.path.append('SVSF_Track')
 import math
 import matplotlib.path as mpltPath
-from .fusion_utils.radar_utils import *
+from fusion_utils.radar_utils import *
 import yaml
 from yaml import Loader
 from mpl_point_clicker import clicker

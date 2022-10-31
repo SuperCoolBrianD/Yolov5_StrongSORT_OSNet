@@ -6,6 +6,9 @@ from sklearn.cluster import DBSCAN
 from sklearn.preprocessing import StandardScaler
 import matplotlib.patches as patches
 from sensor_msgs.msg import Image
+import sensor_msgs.point_cloud2 as pc2
+from sensor_msgs.point_cloud2 import _get_struct_fmt
+from sensor_msgs.msg import Image
 import sys
 import math
 import matplotlib.path as mpltPath
@@ -17,19 +20,19 @@ import pickle
 import os
 import torch
 import random
-from Yolov5_StrongSORT_OSNet.strong_sort.deep.reid.torchreid.metrics import compute_distance_matrix
 
-from Yolov5_StrongSORT_OSNet.track_custom import load_weight_sort, process_track
+# from Yolov5_StrongSORT_OSNet.strong_sort.deep.reid.torchreid.metrics import compute_distance_matrix
+
+# from Yolov5_StrongSORT_OSNet.track_custom import load_weight_sort, process_track
 _DATATYPES = {}
-_DATATYPES[PointField.INT8]    = ('b', 1)
-_DATATYPES[PointField.UINT8]   = ('B', 1)
-_DATATYPES[PointField.INT16]   = ('h', 2)
-_DATATYPES[PointField.UINT16]  = ('H', 2)
-_DATATYPES[PointField.INT32]   = ('i', 4)
-_DATATYPES[PointField.UINT32]  = ('I', 4)
+_DATATYPES[PointField.INT8] = ('b', 1)
+_DATATYPES[PointField.UINT8] = ('B', 1)
+_DATATYPES[PointField.INT16] = ('h', 2)
+_DATATYPES[PointField.UINT16] = ('H', 2)
+_DATATYPES[PointField.INT32] = ('i', 4)
+_DATATYPES[PointField.UINT32] = ('I', 4)
 _DATATYPES[PointField.FLOAT32] = ('f', 4)
 _DATATYPES[PointField.FLOAT64] = ('d', 8)
-
 
 
 def cfg_read(filename):
@@ -121,24 +124,23 @@ def extrinsic_matrix(rx, ry, rz, tx, ty, tz):
     t[0, 3] = tx
     t[1, 3] = ty
     t[2, 3] = tz
-    rr = rx@ry@rz
+    rr = rx @ ry @ rz
     r = np.eye(4)
     r[:3, :3] = rr
-    return r@t
+    return r @ t
 
 
 def c_extrinsic_matrix(rx, ry, rz, tx, ty, tz):
     rx = rotx(rx)
     ry = roty(ry)
     rz = rotz(rz)
-    R = rx@ry@rz
+    R = rx @ ry @ rz
     C = np.array([[tx, ty, tz]]).T
-    t = -R@C
+    t = -R @ C
     mtr = np.eye(4)
     mtr[:3, :3] = R.T
     mtr[:3, 2] = t
     return mtr
-
 
 
 def cam_radar(rx, ry, rz, tx, ty, tz, c):
@@ -146,7 +148,7 @@ def cam_radar(rx, ry, rz, tx, ty, tz, c):
     cam_matrix[:3, :3] = c
     extrinsic = extrinsic_matrix(rx, ry, rz, tx, ty, tz)
 
-    proj_radar2cam = cam_matrix@extrinsic
+    proj_radar2cam = cam_matrix @ extrinsic
 
     return proj_radar2cam
 
@@ -156,7 +158,7 @@ def camera_pose(rx, ry, rz, tx, ty, tz, c):
     cam_matrix[:3, :3] = c
     extrinsic = extrinsic_matrix(rx, ry, rz, tx, ty, tz)
     # print(radar_matrix)
-    proj_radar2cam = cam_matrix@extrinsic
+    proj_radar2cam = cam_matrix @ extrinsic
     # print(cam_matrix)
     return proj_radar2cam
 
@@ -184,9 +186,9 @@ def render_radar_on_image(pts_radar, img, proj_radar2cam, img_width, img_height)
     for i in range(imgfov_pc_pixel.shape[1]):
         depth = imgfov_pc_cam2[2, i]
         cl = int(1200 / depth)
-        if cl>255:
-            cl=255
-        elif cl<0:
+        if cl > 255:
+            cl = 255
+        elif cl < 0:
             cl = 0
 
         color = cmap[cl, :]
@@ -201,7 +203,7 @@ def filter_cluster(pc, label):
     msk = label != -1
     pc = pc[msk, :]
     if pc.shape[0] == 0:
-        return np.zeros([1,5])
+        return np.zeros([1, 5])
     return pc
 
 
@@ -247,22 +249,21 @@ def filter_move(pc):
     return pc
 
 
-
 def get_bbox(arr):
     x_coord, y_coord, z_coord = arr[:, 0], arr[:, 1], arr[:, 2]
-    x_min = min(x_coord)-1
-    z_min = min(z_coord)-1
-    x_max = max(x_coord)+1
-    z_max = max(z_coord)+1
-    return [x_min, z_min, x_max-x_min, z_max-z_min], np.array([[x_min, z_min, x_max, z_max, 1]])
+    x_min = min(x_coord) - 1
+    z_min = min(z_coord) - 1
+    x_max = max(x_coord) + 1
+    z_max = max(z_coord) + 1
+    return [x_min, z_min, x_max - x_min, z_max - z_min], np.array([[x_min, z_min, x_max, z_max, 1]])
 
 
 def get_bbox_2d(arr):
     x_coord, y_coord, z_coord = arr[:, 0], arr[:, 1], arr[:, 2]
-    x_min = min(x_coord)-1
-    y_min = min(y_coord)-1
-    x_max = max(x_coord)+1
-    y_max = max(y_coord)+1
+    x_min = min(x_coord) - 1
+    y_min = min(y_coord) - 1
+    x_max = max(x_coord) + 1
+    y_max = max(y_coord) + 1
     return (int(x_min), int(y_max)), (int(x_max), int(y_min))
 
 
@@ -274,8 +275,8 @@ def get_bbox_cls(arr):
     y_max = max(y_coord)
     z_min = min(z_coord)
     z_max = max(z_coord)
-    return np.array([x_min+(x_max-x_min)/2, y_min+(y_max-y_min)/2, z_min+(z_max-z_min)/2,
-                      x_max-x_min, y_max-y_min, z_max-z_min, 0])
+    return np.array([x_min + (x_max - x_min) / 2, y_min + (y_max - y_min) / 2, z_min + (z_max - z_min) / 2,
+                     x_max - x_min, y_max - y_min, z_max - z_min, 0])
 
 
 def get_bbox_cls_label(arr, clf):
@@ -286,9 +287,8 @@ def get_bbox_cls_label(arr, clf):
     y_max = max(y_coord)
     z_min = min(z_coord)
     z_max = max(z_coord)
-    return [x_min+(x_max-x_min)/2, y_min+(y_max-y_min)/2, z_min+(z_max-z_min)/2,
-                      x_max-x_min, y_max-y_min, z_max-z_min, 0, 0, 0, clf]
-
+    return [x_min + (x_max - x_min) / 2, y_min + (y_max - y_min) / 2, z_min + (z_max - z_min) / 2,
+            x_max - x_min, y_max - y_min, z_max - z_min, 0, 0, 0, clf]
 
 
 def get_bbox_cls_label_kitti(arr, clf, box2d):
@@ -299,9 +299,9 @@ def get_bbox_cls_label_kitti(arr, clf, box2d):
     y_max = max(y_coord)
     z_min = min(z_coord)
     z_max = max(z_coord)
-    return [clf,0, 0, 0, box2d[0], box2d[1], box2d[2], box2d[3],
-                      x_max-x_min, y_max-y_min, z_max-z_min, x_min+(x_max-x_min)/2, y_min+(y_max-y_min)/2, z_min+(z_max-z_min)/2, 0, 0]
-
+    return [clf, 0, 0, 0, box2d[0], box2d[1], box2d[2], box2d[3],
+            x_max - x_min, y_max - y_min, z_max - z_min, x_min + (x_max - x_min) / 2, y_min + (y_max - y_min) / 2,
+            z_min + (z_max - z_min) / 2, 0, 0]
 
 
 def get_bbox_coord(t1, t2, t3, w, h, l, rz, is_homogenous=False):
@@ -309,7 +309,7 @@ def get_bbox_coord(t1, t2, t3, w, h, l, rz, is_homogenous=False):
 
     # 3D bounding box vertices [3, 8]
     z = [l / 2, l / 2, -l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2]
-    y = [-h/2, -h/2, -h/2, -h/2, h/2, h/2, h/2, h/2]
+    y = [-h / 2, -h / 2, -h / 2, -h / 2, h / 2, h / 2, h / 2, h / 2]
     x = [w / 2, -w / 2, -w / 2, w / 2, w / 2, -w / 2, -w / 2, w / 2]
     box_coord = np.vstack([x, y, z])
     R = rotz(rz)  # [3, 3]
@@ -322,27 +322,29 @@ def get_bbox_coord(t1, t2, t3, w, h, l, rz, is_homogenous=False):
 
     return points_3d
 
+
 def Cam2Ground(px, py, P):
-    p = np.array([[px, py, 1]]).T # pixel coordinate
-    W = P@p # world coordinate
-    X = W[0, 0]/W[2,0]
-    Z = W[1, 0]/W[2,0]
+    p = np.array([[px, py, 1]]).T  # pixel coordinate
+    W = P @ p  # world coordinate
+    X = W[0, 0] / W[2, 0]
+    Z = W[1, 0] / W[2, 0]
     return X, Z
+
 
 def Cam2WCS(rx, ry, rz, tx, ty, tz, intrinsic):
     rx = rotx(rx)
     ry = roty(ry)
     rz = rotz(rz)
-    rr = rotx(-0.5*np.pi) @ roty(0.5*np.pi) @ rx @ry @rz
+    rr = rotx(-0.5 * np.pi) @ roty(0.5 * np.pi) @ rx @ ry @ rz
     # rotation matrix
-    rr [0,0] = rr [1,1] = rr[1, 2] = rr[2,0]=0
-    rr [1, 0] = -1
+    rr[0, 0] = rr[1, 1] = rr[1, 2] = rr[2, 0] = 0
+    rr[1, 0] = -1
     rr = rr.T
     c = np.array([[tx, ty, tz]]).T
-    t = -rr@c  # translation vector
+    t = -rr @ c  # translation vector
     P = intrinsic @ np.array([[rr[0, 0], rr[0, 1], t[0, 0]],  # extrinsic matrix
-                             [rr[1, 0], rr[1, 1], t[1, 0]],
-                             [rr[2, 0], rr[2, 1], t[2, 0]]])
+                              [rr[1, 0], rr[1, 1], t[1, 0]],
+                              [rr[2, 0], rr[2, 1], t[2, 0]]])
     P = np.linalg.inv(P)  # world coordinate
     return P
 
@@ -355,7 +357,7 @@ class calib():
         self.c2g = extrinsic_matrix(alpha, 0, 0, 0, height, 0)
         self.g2c_p = cam_radar(-alpha, 0, 0, 0, -height, 0, mtx)
         self.c2wcs = Cam2WCS(alpha, 0, 0, 0, 0, -height, mtx)
-    
+
 
 def draw_projected_box3d(image, qs, color=(255, 255, 255), thickness=1):
     qs = qs.astype(np.int32).transpose()
@@ -371,7 +373,7 @@ def draw_projected_box3d(image, qs, color=(255, 255, 255), thickness=1):
         cv2.line(image, (qs[i, 0], qs[i, 1]), (qs[j, 0], qs[j, 1]), color, thickness, cv2.LINE_AA)
 
 
-def dbscan_cluster(pc, eps=3, min_sample=25):
+def dbscan_cluster(pc, eps=3, min_sample=25, axs=None):
     """
     clustering algorithm
     pc: radar point cloud (Nx5)
@@ -407,13 +409,13 @@ def dbscan_cluster(pc, eps=3, min_sample=25):
 
 def plot_box(bbox, c, axs):
     # axs.scatter(c[:, 0], c[:, 1], s=0.5)
-    rect = patches.Rectangle((bbox[0], bbox[1]), bbox[2]-bbox[0], bbox[3]- bbox[1], linewidth=1, edgecolor='blue',
+    rect = patches.Rectangle((bbox[0], bbox[1]), bbox[2] - bbox[0], bbox[3] - bbox[1], linewidth=1, edgecolor='blue',
                              facecolor='none')
     axs.add_patch(rect)
 
 
 def get_centroid(bbox):
-    return bbox[2]-bbox[0], bbox[3]-bbox[1]
+    return bbox[2] - bbox[0], bbox[3] - bbox[1]
 
 
 def match_measurement(detection_list, tracks):
@@ -422,7 +424,7 @@ def match_measurement(detection_list, tracks):
     thresh = 1
     for index, det in enumerate(detection_list):
         if det.sensor != 'Camera' and det.sensor != 'Radar_track':
-            d = np.sqrt((det.centroid[0] - tracks[0])**2 + (det.centroid[2] - tracks[1])**2)
+            d = np.sqrt((det.centroid[0] - tracks[0]) ** 2 + (det.centroid[2] - tracks[1]) ** 2)
             if d < distance and d < thresh:
                 distance = d
                 picked = index
@@ -438,6 +440,7 @@ def match_track_camera(camera_list, centroid):
 
 class radar_object:
     """radar object for data abstraction"""
+
     def __init__(self, current_p):
         """current_p: first position where the track is initialized Tuple ((x, y), time)"""
         self.tracklet = [current_p]
@@ -456,10 +459,10 @@ class radar_object:
         l = len(self.tracklet)
         average_window = 6
         if l > 5:
-            for i in range(2, average_window+1):
+            for i in range(2, average_window + 1):
                 speed_hist.append(np.sqrt(((self.tracklet[-1][0][0] - self.tracklet[-i][0][0]) ** 2 +
-                                      (self.tracklet[-1][0][1] - self.tracklet[-i][0][1]) ** 2)) / (
-                                         self.tracklet[-1][1] - self.tracklet[-i][1]) * 3.6)
+                                           (self.tracklet[-1][0][1] - self.tracklet[-i][0][1]) ** 2)) / (
+                                          self.tracklet[-1][1] - self.tracklet[-i][1]) * 3.6)
             self.speed = sum(speed_hist) / len(speed_hist)
         else:
             self.speed = 'Measuring'
@@ -545,6 +548,21 @@ class SRS_data_frame:
         self.radar_frame = 0
         self.camera_frame = 0
 
+    def load_data(self, data):
+        if self.full_data:
+            self.clear_data()
+        if data.topic == '/Radar':
+            self.radar = data
+            self.has_radar = True
+            self.radar_frame += 1
+        elif data.topic == '/Camera':
+            self.camera = data
+            self.has_camera = True
+            self.camera_frame += 1
+        if self.has_radar and self.has_camera:
+            self.full_data = True
+        return data.topic
+
     def load_data_radar(self, data):
         self.radar = [data]
         self.has_radar = True
@@ -556,7 +574,6 @@ class SRS_data_frame:
         self.has_camera = True
         if self.has_radar and self.has_camera:
             self.full_data = True
-
 
     def clear_data(self):
         self.camera = None
@@ -573,26 +590,25 @@ class SRS_data_frame_buffer:
         self.has_radar = False
         self.has_camera = False
         self.full_data = False
+
     def load_data_radar(self, data):
         self.radar.append(data)
         self.has_radar = True
         if self.has_radar and self.has_camera:
             self.full_data = True
+
     def load_data_camera(self, data):
         self.camera.append(data)
         self.has_camera = True
         if self.has_radar and self.has_camera:
             self.full_data = True
+
     def clear(self):
         self.camera = []
         self.radar = []
         self.has_radar = False
         self.has_camera = False
         self.full_data = False
-
-
-
-
 
 
 class SRS_data_frame_buffer_sort:
@@ -602,6 +618,7 @@ class SRS_data_frame_buffer_sort:
         self.has_radar = False
         self.has_camera = False
         self.full_data = False
+
     def load_data(self, data):
         if data[1] == 'c':
             self.camera.append(data[0])
@@ -613,6 +630,7 @@ class SRS_data_frame_buffer_sort:
             self.has_radar = True
             if self.has_radar and self.has_camera:
                 self.full_data = True
+
     def clear(self):
         self.camera = []
         self.radar = []
@@ -621,10 +639,9 @@ class SRS_data_frame_buffer_sort:
         self.full_data = False
 
 
-
 class DetectedObject:
     def __init__(self, r_d=None, c_d=None, trk=None):
-        if c_d and not  r_d:
+        if c_d and not r_d:
             self.cam_label = c_d[1]
             self.cam_box = c_d[0]
             self.cam_id = c_d[2]
@@ -702,6 +719,7 @@ class TrackedObjectALL:
         self.activate = sensor
         self.deleted = False
         self.intrack = True
+
     def delete(self):
         self.c_id = []
         self.r_id = []
@@ -709,9 +727,10 @@ class TrackedObjectALL:
         self.life = 0
         self.deleted = True
 
+
 class RadarTrackedObject:
     def __init__(self):
-        self.dets=[]
+        self.dets = []
         self.start = None
 
     def get_prediction(self, camera=True):
@@ -732,7 +751,8 @@ class RadarTrackedObject:
         if camera:
             return radar_label, centroid, num_pts, cam_label, cam_box, cam_id
         else:
-            return radar_label, centroid,  num_pts
+            return radar_label, centroid, num_pts
+
 
 def timestamp_sync(imgs, t):
     diff = 10000
@@ -746,10 +766,11 @@ def timestamp_sync(imgs, t):
 
 
 def imgmsg_to_cv2(img_msg):
-    dtype = np.dtype("uint8") # Hardcode to 8 bits...
+    dtype = np.dtype("uint8")  # Hardcode to 8 bits...
     dtype = dtype.newbyteorder('>' if img_msg.is_bigendian else '<')
-    image_opencv = np.ndarray(shape=(img_msg.height, img_msg.width, 3), # and three channels of data. Since OpenCV works with bgr natively, we don't need to reorder the channels.
-                    dtype=dtype, buffer=img_msg.data)
+    image_opencv = np.ndarray(shape=(img_msg.height, img_msg.width, 3),
+                              # and three channels of data. Since OpenCV works with bgr natively, we don't need to reorder the channels.
+                              dtype=dtype, buffer=img_msg.data)
     # If the byt order is different between the message and the system.
     if img_msg.is_bigendian == (sys.byteorder == 'little'):
         image_opencv = image_opencv.byteswap().newbyteorder()
@@ -763,7 +784,7 @@ def cv2_to_imgmsg(cv_image):
     img_msg.encoding = "bgr8"
     img_msg.is_bigendian = 0
     img_msg.data = cv_image.tostring()
-    img_msg.step = len(img_msg.data) // img_msg.height # That double line is actually integer division, not a comment
+    img_msg.step = len(img_msg.data) // img_msg.height  # That double line is actually integer division, not a comment
     return img_msg
 
 
@@ -806,15 +827,15 @@ def cam_fov_pts(radar_pts, calib, img_width, img_height):
 
 def in_hull(p, hull):
     from scipy.spatial import Delaunay
-    if not isinstance(hull,Delaunay):
+    if not isinstance(hull, Delaunay):
         hull = Delaunay(hull)
-    return hull.find_simplex(p)>=0
+    return hull.find_simplex(p) >= 0
 
 
 def extract_pc_in_box3d(pc, box3d):
     ''' pc: (N,3), box3d: (8,3) '''
-    box3d_roi_inds = in_hull(pc[:,0:3], box3d)
-    return pc[box3d_roi_inds,:], box3d_roi_inds
+    box3d_roi_inds = in_hull(pc[:, 0:3], box3d)
+    return pc[box3d_roi_inds, :], box3d_roi_inds
 
 
 def non_max_suppression_fast(boxes, overlapThresh):
@@ -828,10 +849,10 @@ def non_max_suppression_fast(boxes, overlapThresh):
     # initialize the list of picked indexes
     pick = []
     # grab the coordinates of the bounding boxes
-    x1 = boxes[:,0]
-    y1 = boxes[:,1]
-    x2 = boxes[:,2]
-    y2 = boxes[:,3]
+    x1 = boxes[:, 0]
+    y1 = boxes[:, 1]
+    x2 = boxes[:, 2]
+    y2 = boxes[:, 3]
     # compute the area of the bounding boxes and sort the bounding
     # boxes by the bottom-right y-coordinate of the bounding box
     area = (x2 - x1 + 1) * (y2 - y1 + 1)
@@ -858,7 +879,7 @@ def non_max_suppression_fast(boxes, overlapThresh):
         overlap = (w * h) / area[idxs[:last]]
         # delete all indexes from the index list that have
         idxs = np.delete(idxs, np.concatenate(([last],
-            np.where(overlap > overlapThresh)[0])))
+                                               np.where(overlap > overlapThresh)[0])))
     # return only the bounding boxes that were picked using the
     # integer data type
     return pick
@@ -884,7 +905,7 @@ def _get_struct_fmt(is_bigendian, fields, field_names=None):
             print('Skipping unknown PointField datatype [%d]' % field.datatype, file=sys.stderr)
         else:
             datatype_fmt, datatype_length = _DATATYPES[field.datatype]
-            fmt    += field.count * datatype_fmt
+            fmt += field.count * datatype_fmt
             offset += field.count * datatype_length
 
     return fmt
@@ -904,7 +925,7 @@ def read_points(cloud, field_names=None, skip_nans=False, uvs=[]):
     @return: Generator which yields a list of values for each point.
     @rtype:  generator
     """
-    assert isinstance(cloud, PointCloud2), 'cloud is not a sensor_msgs.msg.PointCloud2'
+    # assert isinstance(cloud, PointCloud2), 'cloud is not a sensor_msgs.msg.PointCloud2'
     fmt = _get_struct_fmt(cloud.is_bigendian, cloud.fields, field_names)
     width, height, point_step, row_step, data, isnan = cloud.width, cloud.height, cloud.point_step, cloud.row_step, cloud.data, math.isnan
     unpack_from = struct.Struct(fmt).unpack_from
@@ -947,7 +968,8 @@ def read_points(cloud, field_names=None, skip_nans=False, uvs=[]):
 
 def pc2_numpy(pc, l):
     arr = np.zeros((l, 5))
-    for i ,point in enumerate(read_points(pc, skip_nans=True)):
+    pc2._type = 'sensor_msgs/PointCloud2'
+    for i, point in enumerate(read_points(pc, skip_nans=True)):
         pt_x = point[0]
         pt_y = point[1]
         pt_z = point[2]
@@ -964,93 +986,10 @@ def pc2_numpy(pc, l):
         #     arr[i, 3] = doppler
     return arr
 
-def face_detection(outputs, extractor, cls_model, cls_name, names, frame, C_M, class_pred=['person']):
-    cluster_center = torch.tensor(cls_model.cluster_centers_)
-    i = 0
-    name_d = dict()
-    for i in cls_name.keys():
-        name_d[cls_name[i]] = 0.
-
-    # root = 'Yolov5_StrongSORT_OSNet/test'
-    # files_cls = os.listdir(root)
-    # object class dict
-    # class_dict = dict()
-    # num_gt = 100
-    # Top_weight = [4, 2, 1, 1, 1, 1, 1, 1, 1, 1]
-    # # obj_name = []
-    # max_obj_name_num = 0
-    # max_obj_name = ""
-    # for i in files_cls:
-    #     files = os.listdir(f'{root}/{i}')
-    #     # initialize class in dict
-    #     class_dict[i] = [[], [], []]
-    #     for j in files:
-    #         obj_file = os.listdir(f"{root}/{i}/{j}")
-    #         obj_num = len(obj_file)
-    #         class_dict[i][2] = obj_num
-    #         if obj_num>5:
-    #             random.shuffle(obj_file)
-    #             for k in obj_file[:num_gt]:
-    #                 class_dict[i][0].append(f"{root}/{i}/{j}/{k}")
-    #                 class_dict[i][1].append(j)
-    #         else:
-    #             for k in obj_file:
-    #                 class_dict[i][0].append(f"{root}/{i}/{j}/{k}")
-    #                 class_dict[i][1].append(j)
-
-
-    # class_predictor_dict =dict()
-    # for i in class_dict.keys():
-    #     imgs = class_dict[i][0]
-    #     class_predictor_dict[i] = extractor(imgs)
-    
-    detection_dict = dict()
-    if np.array(outputs[0]).any():
-        for j, output in enumerate(outputs[0]):
-            if len(output) > 0:
-                class_name = names[int(output[-2])]
-
-                bbox_left = int(output[0])
-                bbox_top = int(output[1])
-                bbox_w = int(output[2] - output[0])
-                bbox_h = int(output[3] - output[1])
-                crop_img = frame[bbox_top:bbox_top+bbox_h, bbox_left:bbox_left+bbox_w]
-                if class_name in detection_dict.keys():
-                    detection_dict[class_name][0].append(crop_img)
-                    detection_dict[class_name][1].append([bbox_left, bbox_top])
-                else:
-                    detection_dict[class_name] = [[crop_img], [[bbox_left, bbox_top]]]
-    for i in detection_dict.keys():
-        if i in class_pred:
-            test_features = extractor(detection_dict[i][0]).cpu().detach().numpy().astype(float)
-            # test_features = scaler.transform(test_features)
-            pred = cls_model.predict(test_features)
-
-            for ii, jj in enumerate(pred):
-                name = cls_name[jj]
-                input1 = torch.tensor(test_features[ii, :]).expand(1, -1)
-                distance = compute_distance_matrix(input1, cluster_center).cpu().detach().numpy().astype(float)
-                #print(np.min(distance) )
-                for iii, dist in enumerate(distance.flatten()):
-
-                    name_d[cls_name[iii]] = f'{int(dist)}'
-                if np.min(distance) > 400:
-                    cv2.putText(C_M, 'Not sure who this is', (int(detection_dict[i][1][ii][0]), int(detection_dict[i][1][ii][1])),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 0, 0), 2)
-                    cv2.putText(C_M, f'{name_d}',
-                                (int(detection_dict[i][1][ii][0]), int(detection_dict[i][1][ii][1])-50),
-                                cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-                else:
-                    cv2.putText(C_M, name, (int(detection_dict[i][1][ii][0]), int(detection_dict[i][1][ii][1])),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 0, 0), 2)
-                    cv2.putText(C_M, f'{name_d}', (int(detection_dict[i][1][ii][0]), int(detection_dict[i][1][ii][1])-50),
-                                cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-    return C_M
-
 
 def msg_sort(t):
-    return t[0].header.stamp.sec + t[0].header.stamp.nanosec*10**(-9)
+    return t[0].header.stamp.sec + t[0].header.stamp.nanosec * 10 ** (-9)
 
 
 def msg_sortv2(t):
-    return t.header.stamp.sec + t.header.stamp.nanosec*10**(-9)
+    return t.header.stamp.sec + t.header.stamp.nanosec * 10 ** (-9)
