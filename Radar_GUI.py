@@ -5,7 +5,7 @@ import shutil
 
 def parse_opt():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--footage', nargs='+', type=str, default='remote.bag', help='Recording file')
+    parser.add_argument('--footage', nargs='+', type=str, default='remote', help='Recording file')
     opt = parser.parse_args()
     return opt
 

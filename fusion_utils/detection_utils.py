@@ -3,6 +3,7 @@ import cv2
 from fusion_utils import radar_utils, learn_utils, auto_label_util
 import numpy as np
 import math
+
 class RadarTracking:
 
     def __init__(self):
@@ -213,3 +214,94 @@ class RadarTracking:
         return detection_list
 
 
+def radar_detection(arr, C_M, pc, camera_detection, cam_2d, calib_g2c_p, scaler_model, svm_model):
+    detection_list = []
+    total_box, cls = radar_utils.dbscan_cluster(pc, eps=2, min_sample=5)
+    total_box_1, cls_1 = radar_utils.dbscan_cluster(pc, eps=1.5, min_sample=2)
+    img, cam_arr = radar_utils.render_radar_on_image(arr, C_M, calib_g2c_p, 9000, 9000)
+    if isinstance(cls, type(None)):
+        cls = []
+    if isinstance(cls_1, type(None)):
+        cls_1 = []
+    total_box = np.vstack((total_box, total_box_1))
+    # print(total_box)
+    box_index = radar_utils.non_max_suppression_fast(total_box[:, :4], .2)
+    cls.extend(cls_1)
+    cls = [cls[ii] for ii in box_index]
+    total_box = total_box[box_index, :]
+    measSet = np.empty((0, 4))
+    if cls:
+        features = np.empty((0, 12))
+        radar_detection = []
+        for ii, cc in enumerate(cls):
+            # plot_box(total_box[ii, :], cc, axs)
+            centroid = np.mean(cc, axis=0)
+            # get tracking measurement
+            measSet = np.vstack((measSet, centroid))
+            bbox = radar_utils.get_bbox_cls(cc)
+            features = np.vstack((features, np.array(learn_utils.get_features(cc, bbox))))
+            bbox = radar_utils.get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], 0)
+            bbox = radar_utils.project_to_image(bbox, calib_g2c_p)
+            pts = radar_utils.project_to_image(cc.T, calib_g2c_p)
+            box2d = radar_utils.get_bbox_2d(pts.T)
+            cv2.rectangle(img, box2d[0], box2d[1], (255, 255, 0))
+            box2d = [box2d[0][0], box2d[0][1], box2d[1][0], box2d[1][1]]
+            box2d = auto_label_util.convert_topy_bottomx(box2d)
+            radar_detection.append([cc, centroid, bbox, box2d])
+        measSet = np.vstack((measSet[:, 0].T, measSet[:, 2].T))
+        features = scaler_model.fit_transform(features)
+        prediction = svm_model.predict_proba(features)
+        for ii in range(len(cls)):
+            pd = np.argmax(prediction[ii, :])
+            radar_detection[ii].append(prediction[ii, :])
+
+        radar_2d = np.asarray([ii[3] for ii in radar_detection])
+
+        if cam_2d.any():
+            radar_matched, camera_matched, ious, radar_unmatched, camera_unmatched = auto_label_util.match_detection(
+                radar_2d, cam_2d)
+            for ii in range(len(radar_matched)):
+                detection_list.append(radar_utils.DetectedObject(r_d=radar_detection[radar_matched[ii]],
+                                                                 c_d=camera_detection[camera_matched[ii]]))
+            for ii in radar_unmatched:
+                detection_list.append(radar_utils.DetectedObject(r_d=radar_detection[ii]))
+            for ii in camera_unmatched:
+                detection_list.append(radar_utils.DetectedObject(c_d=camera_detection[ii]))
+        else:
+            for ii in radar_detection:
+                detection_list.append(radar_utils.DetectedObject(r_d=ii))
+    elif camera_detection:
+        # initiate empty radar measurement if no object is detected on radar
+        # initiate all detections for camera
+        measSet = np.empty((2, 0))
+        for ii in camera_detection:
+            detection_list.append(radar_utils.DetectedObject(c_d=ii))
+    else:
+        # initiate measurement if no object is detected in both camera and radar
+        measSet = np.empty((2, 0))
+    return detection_list, img, measSet
+
+# def update(measSet,trackList, lastTrackIdx, PG, MP_IMM, maxVals, sensorPos, k, filterType, lambdaVal, MP_IPDA, PD, SVSFParams, useLogic, N1, M2, N2, N3, delTenThr, delConfThr, confTenThr,
+#            isMM, G_List, H, Q_List, R, models, filters, Ts, pInit, sensorType, maxVel, maxAcc, omegaMax, G):
+#     trackList, unassignedMeas = Track_MTT.gating(trackList, lastTrackIdx, PG, MP_IMM, maxVals, sensorPos, measSet, k)
+#     # perform gating
+#     trackList = Track_MTT.updateStateTracks(trackList, lastTrackIdx, filterType, measSet, maxVals,
+#                                 lambdaVal, MP_IPDA, PG, PD, sensorPos, SVSFParams, k)
+#     # update the state of each track
+#     if useLogic == True:
+#         trackList = Track_MTT.updateTracksStatus_MN(trackList, lastTrackIdx, N1, M2, N2, N3, k)
+#     else:
+#         trackList = Track_MTT.updateTracksStatus(trackList, lastTrackIdx, delTenThr, delConfThr, confTenThr,
+#                                     k)  # update the status of each track usiing the track manager
+#
+#     # update the status of each track usiing the track manager
+#     # initiate tracks for measurements that were not gated or in other words unassigned measurements
+#
+#     if isMM == True:
+#         trackList, lastTrackIdx = Track_MTT.initiateTracksMM(trackList, lastTrackIdx, unassignedMeas, maxVals, G_List, H,
+#                                                 Q_List, R, models, filters, Ts, pInit, k, sensorType,
+#                                                 sensorPos, N)
+#     else:
+#         trackList, lastTrackIdx = Track_MTT.initiateTracks(trackList, lastTrackIdx, measSet, maxVel, maxAcc, omegaMax, G,
+#                                                 self.H, self.Q, self.R, self.modelType, self.Ts, self.pInit, self.k, self.sensorType, self.sensorPos, self.N)
+#     self.k+=1

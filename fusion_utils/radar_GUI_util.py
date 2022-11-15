@@ -8,17 +8,21 @@ import cv2
 from sklearn.cluster import DBSCAN
 from sklearn.preprocessing import StandardScaler
 import matplotlib.patches as patches
+import sensor_msgs.point_cloud2 as pc2
 from sensor_msgs.msg import Image
 import sys
 sys.path.append('yolor')
 sys.path.append('SVSF_Track')
 import math
 import matplotlib.path as mpltPath
+import rosbag
 from fusion_utils.radar_utils import *
 import yaml
 from yaml import Loader
 from mpl_point_clicker import clicker
 import argparse
+from rosbags.rosbag2 import Reader
+from rosbags.serde import deserialize_cdr
 
 def get_parser():
     parser = argparse.ArgumentParser(description='my description')
@@ -60,10 +64,6 @@ def cfg_write(filename, r2c_ext, c2g_ext, intrinsic, road_mask_x, road_mask_y):
     return
 
 def r2c_extrinsic(intrinsic, footage):
-    # Read recording
-    bag = rosbag.Bag(footage)
-    topics = bag.get_type_and_topic_info()
-
     cv2.namedWindow("Camera")
     cv2.moveWindow('Camera', 800, 800)
     # intrinsic
@@ -88,91 +88,92 @@ def r2c_extrinsic(intrinsic, footage):
     cv2.setTrackbarPos('tx', 'TrackBar', 57, )
     cv2.setTrackbarPos('ty', 'TrackBar', 50, )
     cv2.setTrackbarPos('tz', 'TrackBar', 50, )
-    frame = SRS_data_frame()
     r2c_ext = [0, 0, 0, 0, 0, 0]
-    for j, i in enumerate(bag.read_messages()):
-        sensor = frame.load_data(i)
-        if sensor == "/Radar":
-            npts = frame.radar.message.width
-            arr_all = pc2_numpy(frame.radar.message, npts)
-            # arr_concat = np.vstack((arr_all, p_arr_all))
-            arr_concat = arr_all
-            p_arr_all = arr_concat.copy()
-        # print(idx)
-        # print(sensor)
-        if frame.full_data:
-            image_np = imgmsg_to_cv2(frame.camera.message)
-            arr = filter_zero(arr_all)
-            # draw points on plt figure
-            pc = arr[:, :4]
-            ped_box = np.empty((0, 5))
-            total_box, cls = dbscan_cluster(pc, eps=2, min_sample=20)
-            if total_box.any() and ped_box.any:
-                total_box = np.vstack((total_box, ped_box))
-            # yolo detection
-            # cam1, detection = detect(source=cam1, model=model, device=device, colors=colors, names=names,
-            #                              view_img=False)
-            # Radar projection onto camera parameters
-            rx = cv2.getTrackbarPos('rx', 'TrackBar') / 100
-            ry = cv2.getTrackbarPos('ry', 'TrackBar') / 100
-            rz = cv2.getTrackbarPos('rz', 'TrackBar') / 100 - 157
-            tx = cv2.getTrackbarPos('tx', 'TrackBar') / 10 - 5
-            ty = cv2.getTrackbarPos('ty', 'TrackBar') / 10 - 5
-            tz = cv2.getTrackbarPos('tz', 'TrackBar') / 10 - 5
-
-            r2c = cam_radar(rx, ry, rz, tx, ty, tz, mtx)
-            new_cam1, cam_arr = render_radar_on_image(arr, cam1, r2c, 9000, 9000)
-
-
-            print('Adjust using trackbar, Press c for next frame')
-            print('Press q to return values')
-            while True:
+    # Read recording
+    frame = SRS_data_frame()
+    with Reader(footage) as reader:
+        connections = [x for x in reader.connections if x.topic in ['/Radar', '/Camera']]
+        for i, (connection, timestamp, rawdata) in enumerate(reader.messages(connections=connections)):
+            msg = deserialize_cdr(rawdata, connection.msgtype)
+            msg.topic = connection.topic
+            sensor = frame.load_data(msg)
+            if sensor == "/Radar":
+                npts = frame.radar.width
+                arr_all = pc2_numpy(frame.radar, npts)
+                # arr_concat = np.vstack((arr_all, p_arr_all))
+                arr_concat = arr_all
+                p_arr_all = arr_concat.copy()
+            # print(idx)
+            # print(sensor)
+            if frame.full_data:
+                image_np = imgmsg_to_cv2(frame.camera)
+                arr = filter_zero(arr_all)
+                # draw points on plt figure
+                pc = arr[:, :4]
+                ped_box = np.empty((0, 5))
+                total_box, cls = dbscan_cluster(pc, eps=2, min_sample=20)
+                if total_box.any() and ped_box.any:
+                    total_box = np.vstack((total_box, ped_box))
+                # yolo detection
+                # cam1, detection = detect(source=cam1, model=model, device=device, colors=colors, names=names,
+                #                              view_img=False)
+                # Radar projection onto camera parameters
                 rx = cv2.getTrackbarPos('rx', 'TrackBar') / 100
                 ry = cv2.getTrackbarPos('ry', 'TrackBar') / 100
-                rz = cv2.getTrackbarPos('rz', 'TrackBar') / 100 - 1.57
+                rz = cv2.getTrackbarPos('rz', 'TrackBar') / 100 - 157
                 tx = cv2.getTrackbarPos('tx', 'TrackBar') / 10 - 5
                 ty = cv2.getTrackbarPos('ty', 'TrackBar') / 10 - 5
                 tz = cv2.getTrackbarPos('tz', 'TrackBar') / 10 - 5
+
                 r2c = cam_radar(rx, ry, rz, tx, ty, tz, mtx)
-                r2c_ext[0] = rx
-                r2c_ext[1] = ry
-                r2c_ext[2] = rz
-                r2c_ext[3] = tx
-                r2c_ext[4] = ty
-                r2c_ext[5] = tz
-
-                # extrinsic radar -> pixel coordinate
-                # radar -> camera coordinate
-                # radar_cam_coord -> rotx(alpha) * radar_cam_coord -> world coordinate with origin at radar (pitch about 5 degree)
-                new_cam1, cam_arr = render_radar_on_image(arr_all, image_np, r2c, 9000, 9000)
-                if cls:
-                    for cc in cls:
-                        bbox = get_bbox_cls(cc)
-                        bbox = get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], 0)
-                        bbox = project_to_image(bbox, r2c)
-                        draw_projected_box3d(new_cam1, bbox)
-                        xyz = np.mean(cc, axis=0).reshape((-1, 1))
-                        xyz = xyz[:3, :]
-                        cent = project_to_image(xyz, r2c)
-                        cent = (int(cent[0, 0]), int(cent[1, 0]))
-                        new_cam1 = cv2.circle(new_cam1, cent, 5, (255, 255, 0), thickness=2)
-
-                cv2.imshow('Camera', new_cam1)
-                key = cv2.waitKey(1) & 0xFF
-                if key == ord('c'):
-                    break
-                if key == ord('q'):
-                    cv2.destroyWindow('TrackBar')
-                    cv2.destroyWindow('Camera')
-                    return r2c_ext
+                new_cam1, cam_arr = render_radar_on_image(arr, cam1, r2c, 9000, 9000)
 
 
+                print('Adjust using trackbar, Press c for next frame')
+                print('Press q to return values')
+                while True:
+                    rx = cv2.getTrackbarPos('rx', 'TrackBar') / 100
+                    ry = cv2.getTrackbarPos('ry', 'TrackBar') / 100
+                    rz = cv2.getTrackbarPos('rz', 'TrackBar') / 100 - 1.57
+                    tx = cv2.getTrackbarPos('tx', 'TrackBar') / 10 - 5
+                    ty = cv2.getTrackbarPos('ty', 'TrackBar') / 10 - 5
+                    tz = cv2.getTrackbarPos('tz', 'TrackBar') / 10 - 5
+                    r2c = cam_radar(rx, ry, rz, tx, ty, tz, mtx)
+                    r2c_ext[0] = rx
+                    r2c_ext[1] = ry
+                    r2c_ext[2] = rz
+                    r2c_ext[3] = tx
+                    r2c_ext[4] = ty
+                    r2c_ext[5] = tz
+
+                    # extrinsic radar -> pixel coordinate
+                    # radar -> camera coordinate
+                    # radar_cam_coord -> rotx(alpha) * radar_cam_coord -> world coordinate with origin at radar (pitch about 5 degree)
+                    new_cam1, cam_arr = render_radar_on_image(arr, image_np, r2c, 9000, 9000)
+                    if cls:
+                        for cc in cls:
+                            bbox = get_bbox_cls(cc)
+                            bbox = get_bbox_coord(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], 0)
+                            bbox = project_to_image(bbox, r2c)
+                            draw_projected_box3d(new_cam1, bbox)
+                            xyz = np.mean(cc, axis=0).reshape((-1, 1))
+                            xyz = xyz[:3, :]
+                            cent = project_to_image(xyz, r2c)
+                            cent = (int(cent[0, 0]), int(cent[1, 0]))
+                            new_cam1 = cv2.circle(new_cam1, cent, 5, (255, 255, 0), thickness=2)
+
+                    cv2.imshow('Camera', new_cam1)
+                    key = cv2.waitKey(1) & 0xFF
+                    if key == ord('c'):
+                        break
+                    if key == ord('q'):
+                        cv2.destroyWindow('TrackBar')
+                        cv2.destroyWindow('Camera')
+                        return r2c_ext
 
 
 def c2g_extrinsic(r2c_ext, footage):
     # Read recording
-    bag = rosbag.Bag(footage)
-    topics = bag.get_type_and_topic_info()
 
     rx = r2c_ext[0]
     ry = r2c_ext[1]
@@ -185,32 +186,36 @@ def c2g_extrinsic(r2c_ext, footage):
     frame = SRS_data_frame()
     mes = []
     fig, axs = plt.subplots(2)
-    for j, i in enumerate(bag.read_messages()):
-        if j == 1000:
-            break
-        sensor = frame.load_data(i)                                 #### cannot delete
-        if frame.full_data:
-            image_np = imgmsg_to_cv2(frame.camera.message)
-            npts = frame.radar.message.width
-            arr_all_rad = pc2_numpy(frame.radar.message, npts)
-            arr_all = transform_radar(arr_all_rad.T, r2c_e).T
-            moving = filter_zero(arr_all)
-            pc = moving[:, :4]
-            total_box_1, cls_1 = dbscan_cluster(pc, eps=2, min_sample=2)
-            if cls_1:
-                num = np.random.uniform()
-                if num <= 0.5:
-                    for ii in cls_1:
-                        xyz = np.mean(ii, axis=0)
-                        x = xyz[0]
-                        z = xyz[2]
-                        miny = ii[1, :][np.argmin(ii[1, :])]
-                        rng = math.sqrt(z ** 2 + miny ** 2)
-                        data = [x, miny, z, rng]
-                        mes.append(data)
+    with Reader(footage) as reader:
+        connections = [x for x in reader.connections if x.topic in ['/Radar', '/Camera']]
+        for i, (connection, timestamp, rawdata) in enumerate(reader.messages(connections=connections)):
+            msg = deserialize_cdr(rawdata, connection.msgtype)
+            msg.topic = connection.topic
+            if i == 1000:
+                break
+            sensor = frame.load_data(msg)                                 #### cannot delete
+            if frame.full_data:
+                image_np = imgmsg_to_cv2(frame.camera)
+                npts = frame.radar.width
+                arr_all_rad = pc2_numpy(frame.radar, npts)
+                arr_all = transform_radar(arr_all_rad.T, r2c_e).T
+                moving = filter_zero(arr_all)
+                pc = moving[:, :4]
+                total_box_1, cls_1 = dbscan_cluster(pc, eps=2, min_sample=2)
+                if cls_1:
+                    num = np.random.uniform()
+                    if num <= 0.5:
+                        for ii in cls_1:
+                            xyz = np.mean(ii, axis=0)
+                            x = xyz[0]
+                            z = xyz[2]
+                            miny = ii[1, :][np.argmin(ii[1, :])]
+                            rng = math.sqrt(z ** 2 + miny ** 2)
+                            data = [x, miny, z, rng]
+                            mes.append(data)
 
-            cv2.imshow('camera', image_np)
-            cv2.waitKey(1)
+                cv2.imshow('camera', image_np)
+                cv2.waitKey(1)
 
     cv2.destroyWindow('camera')
     h_list = []
@@ -241,13 +246,9 @@ def c2g_extrinsic(r2c_ext, footage):
         plt.close()
     angle = np.pi/2-angle
     extrinsic = [-float(angle), 0, 0, 0, -float(height), 0]
-    print(extrinsic)
     return extrinsic
 
 def road_mask(intrinsic, r2c_ext, c2g_ext, footage):
-    bag = rosbag.Bag(footage)
-    # bag = rosbag.Bag("record/traffic1.bag")
-    topics = bag.get_type_and_topic_info()
 
     frame = SRS_data_frame()
     p_arr_all = np.empty((0, 5))
@@ -271,28 +272,32 @@ def road_mask(intrinsic, r2c_ext, c2g_ext, footage):
     total_radar_move = np.empty((0, 5))
     total_radar_zero = np.empty((0, 5))
 
-    for j, i in enumerate(bag.read_messages()):
-        if j == 2000:
-            break
-        sensor = frame.load_data(i)
-        if frame.full_data:
-            # print(frame.radar.message.header.stamp.to_sec()- epoch)
-            # epoch = frame.radar.message.header.stamp.to_sec()
-            image_np = imgmsg_to_cv2(frame.camera.message)
-            npts = frame.radar.message.width
-            arr_all = pc2_numpy(frame.radar.message, npts)
-            arr_concat = np.vstack((arr_all, p_arr_all))
-            # coordinate transformation from radar to global
-            arr_c = transform_radar(arr_concat.T, r2c_e).T  # from radar to camera (not pixel)
-            arr_g = transform_radar(arr_c.T, c2g).T  # from camera to global
-            arr_non_zero = filter_zero(arr_g)
-            arr_zero = filter_move(arr_g)
-            total_radar_move = np.vstack((total_radar_move, arr_non_zero))
-            total_radar_zero = np.vstack((total_radar_zero, arr_zero))
-            cv2.imshow('camera', image_np)
-            cv2.waitKey(1)
-            # input()
-            p_arr_all = arr_all.copy()
+    with Reader(footage) as reader:
+        connections = [x for x in reader.connections if x.topic in ['/Radar', '/Camera']]
+        for i, (connection, timestamp, rawdata) in enumerate(reader.messages(connections=connections)):
+            msg = deserialize_cdr(rawdata, connection.msgtype)
+            msg.topic = connection.topic
+            if i == 2000:
+                break
+            sensor = frame.load_data(msg)
+            if frame.full_data:
+                # print(frame.radar.message.header.stamp.to_sec()- epoch)
+                # epoch = frame.radar.message.header.stamp.to_sec()
+                image_np = imgmsg_to_cv2(frame.camera)
+                npts = frame.radar.width
+                arr_all = pc2_numpy(frame.radar, npts)
+                arr_concat = np.vstack((arr_all, p_arr_all))
+                # coordinate transformation from radar to global
+                arr_c = transform_radar(arr_concat.T, r2c_e).T  # from radar to camera (not pixel)
+                arr_g = transform_radar(arr_c.T, c2g).T  # from camera to global
+                arr_non_zero = filter_zero(arr_g)
+                arr_zero = filter_move(arr_g)
+                total_radar_move = np.vstack((total_radar_move, arr_non_zero))
+                total_radar_zero = np.vstack((total_radar_zero, arr_zero))
+                cv2.imshow('camera', image_np)
+                cv2.waitKey(1)
+                # input()
+                p_arr_all = arr_all.copy()
 
     figs, axs = plt.subplots(1, figsize=(6, 6))
     klicker = clicker(axs, ["event"], markers=["x"], **{"linestyle": "--"})
@@ -311,14 +316,20 @@ def road_mask(intrinsic, r2c_ext, c2g_ext, footage):
         road_mask_y.append(lst[j, 1])
     road_mask_x = [float(i) for i in road_mask_x]
     road_mask_y = [float(i) for i in road_mask_y]
+    print(road_mask_y)
 
     return road_mask_x, road_mask_y
     #result found in the histogram
 # mtx = np.array([[747.9932, 0., 655.5036],
 #                 [0., 746.6126, 390.1168],
 #                 [0., 0., 1.]])
-#intrinsic = [747.9932, 0., 655.5036,0., 746.6126, 390.1168,0., 0., 1.]
-#r2c_ext = [1.56, 0, 0.05, 0.3, 0, 0]
-#c2g_ext = [-20/180*np.pi, 0, 0, 0, -10.9, 0]
+intrinsic = [747.9932, 0., 655.5036,0., 746.6126, 390.1168,0., 0., 1.]
+r2c_ext = [1.56, 0, 0.05, 0.3, 0, 0]
+c2g_ext = [-20/180*np.pi, 0, 0, 0, -10.9, 0]
+
 # road_mask(intrinsic, r2c_ext, c2g_ext, "record/rooftop.bag")
 #print(r2c_extrinsic(intrinsic, r2c_ext, "record/rooftop.bag"))
+if __name__ == '__main__':
+    #r2c_extrinsic(intrinsic, 'record/remote')
+    #c2g_extrinsic(r2c_ext, 'record/remote')
+    road_mask(intrinsic, r2c_ext, c2g_ext, 'record/remote')
